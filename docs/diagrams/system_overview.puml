@@ -1,0 +1,74 @@
+@startuml
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam legendBackgroundColor #F8F8F8
+skinparam legendBorderColor #BBBBBB
+
+title ZBStorage System Overview
+
+package "Client Layer" {
+  component "POSIX Client" as ClientPosix
+  component "FUSE Daemon" as ClientFuse
+  component "App SDK" as ClientApp
+}
+
+package "Messaging & RPC" {
+  component "Proto Definitions\n(msg/proto)" as Proto
+  component "bRPC Adapters\n(msg/brpc)" as BRPC
+}
+
+package "Metadata Plane" {
+  component "MdsServer" as MDS
+  component "MetadataManager" as MetaMgr
+  component "DirStore" as DirStore
+  component "DirectoryLockTable" as DirLock
+  component "InodeStorage" as InodeStore
+  component "BitmapStorage" as BitmapStore
+  component "VolumeAllocator" as VolAlloc
+  component "VolumeRegistry" as VolRegistry
+}
+
+package "Data Plane" {
+  component "VolumeManager" as VolMgr
+  component "Storage Resource Manager\n(srm)" as SRM
+  component "StorageNode" as StorageNode
+  component "Block/Volume Layer\n(fs/block, fs/volume, fs/io)" as FSLayer
+}
+
+package "Operations" {
+  component "Monitor Services" as Monitor
+  component "Benchmarks / Stress" as Bench
+}
+
+ClientPosix --> BRPC : POSIX RPC
+ClientFuse --> BRPC : FUSE RPC
+ClientApp --> BRPC : SDK RPC
+BRPC --> Proto
+BRPC --> MDS : Metadata ops
+BRPC --> StorageNode : Data IO (read/write)
+
+MDS --> MetaMgr : allocate/query inodes
+MDS --> DirStore : persist directory entries
+MDS --> DirLock : synchronize directory updates
+MetaMgr --> InodeStore : read/write inode slots
+MetaMgr --> BitmapStore : manage allocation bitmap
+MDS --> VolAlloc : request placement
+VolAlloc --> VolRegistry : enumerate volumes
+MDS --> VolMgr : allocate/free blocks
+VolMgr --> SRM : fetch resource topology
+SRM --> StorageNode : provision media
+StorageNode --> FSLayer : read/write blocks
+
+Monitor --> MDS : collect metrics
+Monitor --> StorageNode : collect metrics
+Monitor --> SRM : resource telemetry
+Bench --> ClientPosix : drive tests
+Bench --> ClientFuse
+Bench --> ClientApp
+
+legend left
+  Relationships depict compile-time or runtime calls.
+  Solid arrows: direct API/RPC invocation.
+  Packages represent top-level source directories.
+endlegend
+@enduml

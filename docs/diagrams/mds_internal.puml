@@ -1,0 +1,65 @@
+@startuml
+skinparam componentStyle rectangle
+skinparam nodesep 40
+skinparam ranksep 30
+
+title MDS Internal Components & Interfaces
+
+package "External Interfaces" {
+  interface "Namespace API\n- CreateRoot\n- Mkdir/Rmdir\n- CreateFile/RemoveFile\n- LookupIno\n- Ls" as IF_namespace
+  interface "Metadata Helpers\n- FindInodeByPath\n- Read/WriteInode\n- AllocateInode" as IF_metadata
+  interface "Integration Hooks\n- set_volume_registry\n- set_volume_manager\n- set_handle_observer\n- RegisterVolume" as IF_hooks
+}
+
+package "MDS Core" {
+  component "MdsServer" as MDS
+  component "DirectoryLockTable" as DirLock
+  component "DirStore" as DirStore
+}
+
+package "Metadata Services" {
+  component "MetadataManager" as Meta
+  component "InodeStorage" as InodeStore
+  component "BitmapStorage" as BitmapStore
+  component "KVStore (optional)" as KV
+}
+
+package "Capacity & IO" {
+  component "VolumeAllocator" as VolAlloc
+  component "VolumeRegistry" as VolRegistry
+  component "VolumeManager" as VolMgr
+  component "IHandleObserver" as HandleObs
+}
+
+IF_namespace --> MDS
+IF_metadata --> MDS
+IF_hooks --> MDS
+
+MDS --> DirLock : directory locks
+MDS --> DirStore : \nPersist directory entries
+MDS --> Meta : inode allocation
+MDS --> VolAlloc : placement requests
+MDS --> VolMgr : release blocks
+MDS --> HandleObs : close handles
+
+Meta --> InodeStore : serialize dinodes
+Meta --> BitmapStore : allocation bitmap
+Meta --> KV : path -> inode cache
+VolAlloc --> VolRegistry : enumerate pools
+
+note bottom of MDS
+- Maintains path->inode cache
+- Coordinates operations & locking
+- Dispatches volume/block actions
+end note
+
+note right of Meta
+Ensures inode lifecycle, bitmap persistence,
+and optional KV lookups to shortcut path resolution.
+end note
+
+note right of DirStore
+One log-structured file per directory;\nused for namespace replay and compaction.
+end note
+
+@enduml

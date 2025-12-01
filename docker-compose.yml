@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # Prometheus Service
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    hostname: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - /mnt/md0/Projects/ZBStorage/prometheus.yml:/etc/prometheus/prometheus.yml # 挂载 Prometheus 配置文件
+    networks:
+      - grafana-net
+
+  # Grafana Service
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    hostname: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=mysecurepassword
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - /docker/grafana/data:/var/lib/grafana
+      - /docker/grafana/config:/etc/grafana # 挂载 Grafana 配置文件
+      - /docker/grafana/logs:/var/log/grafana
+    networks:
+      - grafana-net
+
+networks:
+  grafana-net:
+    driver: bridge

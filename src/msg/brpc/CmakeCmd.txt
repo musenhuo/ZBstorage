@@ -1,0 +1,9 @@
+// 原来的level加了一个后缀
+sudo mv /usr/local/lib/libleveldb.a /usr/local/lib/libleveldb.a.bak
+
+// brpc编译流程
+mkdir build
+cd build
+cmake .. -DCMAKE_INSTALL_LIBDIR=lib
+make
+sudo make install

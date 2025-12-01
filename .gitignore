@@ -1,0 +1,27 @@
+# Build directories
+build/
+_build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+Makefile
+*.ninja
+*.check_cache
+
+# Temporary files
+tmp/
+*.swp
+*.swo
+*~
+
+# IDE settings
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Data directories (assuming these shouldn't be committed based on names)
+data/

@@ -1,0 +1,55 @@
+@startuml
+' Modules
+package "Client / VFS" {
+  [FileSystem (VFS_new)] as FS
+}
+
+package "MDS / Metadata" {
+  [MdsServer] as MDS
+  [MetadataManager] as META
+  [DirStore] as DIR
+  [VolumeAllocator] as ALLOC
+}
+
+package "Volume Registry / Persistence" {
+  [IVolumeRegistry] as REG_IF
+  [FileVolumeRegistry] as FILE_REG
+}
+
+package "Data Plane" {
+  [VolumeManager] as VMGR
+  [IIOGateway] as GATE
+  [LocalStorageGateway] as LOCAL_GW
+  [Volume] as VOL
+  [BlockManager] as BM
+}
+
+package "Clients" {
+  [BlockStoreClient] as BSC
+}
+
+' Calls / Dependencies
+FS --> MDS : CreateFile/RemoveFile/TruncateFile\nRegisterVolume/LookupIno/FindInodeByPath
+FS --> VMGR : write_file/read_file\nregister_volume (local IO path)
+MDS --> META : read_inode/write_inode\nallocate_inode
+MDS --> DIR : add/remove/read dir entries
+MDS --> ALLOC : allocate_for_inode()\nfree_blocks_for_inode()
+ALLOC --> REG_IF : list()/find_by_uuid()
+ALLOC --> VOL : free_blocks(segment)
+REG_IF <.. FILE_REG : implements
+MDS --> REG_IF : RegisterVolume(...) (delegates)
+VMGR --> VOL : allocate_blocks()/submit_io_requests()
+VOL --> BM : allocate_blocks()/free_blocks()/free_blocks_count()
+VMGR --> GATE : processIOBatch()
+GATE <.. LOCAL_GW : implements
+BSC --> REG_IF : find_by_uuid()/list()
+
+note top of FS
+FileSystem is thin: validate/forward to MDS,\nuse VolumeManager for data I/O.
+end note
+
+note top of MDS
+MDS centralizes allocation & persistent registry calls.
+end note
+
+@enduml

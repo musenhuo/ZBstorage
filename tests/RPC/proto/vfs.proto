@@ -1,0 +1,110 @@
+syntax = "proto3";
+package rpc;
+
+import "rpc_common.proto";
+import "mds.proto";
+
+message Empty {}
+
+message PathRequest {
+  string path = 1;
+}
+
+message PathModeRequest {
+  string path = 1;
+  uint32 mode = 2;
+}
+
+message OpenRequest {
+  string path = 1;
+  int32 flags = 2;
+  uint32 mode = 3;
+}
+
+message FdRequest {
+  int32 fd = 1;
+}
+
+message SeekRequest {
+  int32 fd = 1;
+  int64 offset = 2;
+  int32 whence = 3;
+}
+
+message SeekReply {
+  Status status = 1;
+  int64 offset = 2;
+}
+
+message IORequestFD {
+  int32 fd = 1;
+  bytes data = 2; // write payload or read size indicator (length only)
+}
+
+message IOReplyFD {
+  Status status = 1;
+  int64 bytes = 2;
+  bytes data = 3; // for read
+}
+
+message LookupReply {
+  Status status = 1;
+  uint64 inode = 2;
+}
+
+message ColdInodeListReply {
+  Status status = 1;
+  repeated uint64 inodes = 2;
+}
+
+message ColdInodeBitmapReply {
+  Status status = 1;
+  bytes bitmap = 2;
+  uint64 bit_count = 3;
+}
+
+message ColdInodeRequest {
+  uint64 max_candidates = 1;
+  uint64 min_age_windows = 2;
+}
+
+message ColdInodeBitmapRequest {
+  uint64 min_age_windows = 1;
+}
+
+message ColdInodePercentRequest {
+  double percent = 1;
+}
+
+message RegisterVolumeRequest {
+  VolumeBlob volume = 1;
+  uint32 type = 2;
+  bool persist_now = 3;
+}
+
+message RegisterVolumeReply {
+  Status status = 1;
+  int32 index = 2;
+}
+
+service VfsService {
+  rpc Startup(Empty) returns (Status);
+  rpc Shutdown(Empty) returns (Status);
+  rpc CreateRootDirectory(Empty) returns (Status);
+  rpc Mkdir(PathModeRequest) returns (Status);
+  rpc Rmdir(PathRequest) returns (Status);
+  rpc Ls(PathRequest) returns (DirectoryListReply);
+  rpc LookupInode(PathRequest) returns (LookupReply);
+  rpc CreateFile(PathModeRequest) returns (Status);
+  rpc RemoveFile(PathRequest) returns (Status);
+  rpc RegisterVolume(RegisterVolumeRequest) returns (RegisterVolumeReply);
+  rpc Open(OpenRequest) returns (IOReplyFD);   // bytes=fd, status code
+  rpc Close(FdRequest) returns (Status);
+  rpc ShutdownFd(FdRequest) returns (Status);
+  rpc Seek(SeekRequest) returns (SeekReply);
+  rpc Write(IORequestFD) returns (IOReplyFD);
+  rpc Read(IORequestFD) returns (IOReplyFD);
+  rpc CollectColdInodes(ColdInodeRequest) returns (ColdInodeListReply);
+  rpc CollectColdInodesBitmap(ColdInodeBitmapRequest) returns (ColdInodeBitmapReply);
+  rpc CollectColdInodesByAtimePercent(ColdInodePercentRequest) returns (ColdInodeListReply);
+}

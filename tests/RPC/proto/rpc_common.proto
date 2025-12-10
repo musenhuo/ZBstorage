@@ -1,0 +1,21 @@
+syntax = "proto3";
+package rpc;
+
+message Status {
+  int32 code = 1;
+  string message = 2;
+}
+
+message DirectoryEntry {
+  uint64 inode = 1;
+  uint32 type = 2;
+  string name = 3;
+}
+
+message InodeBlob {
+  bytes data = 1; // serialized Inode bytes
+}
+
+message VolumeBlob {
+  bytes data = 1; // serialized Volume bytes
+}

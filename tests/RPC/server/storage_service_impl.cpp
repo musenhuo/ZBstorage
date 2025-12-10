@@ -1,0 +1,150 @@
+#include <brpc/server.h>
+#include <gflags/gflags.h>
+#include <memory>
+#include <string>
+#include <vector>
+#include "../../proto/storage.pb.h"
+#include "../../../src/fs/volume/VolumeManager.h"
+#include "../../../src/fs/io/LocalStorageGateway.h"
+
+DEFINE_int32(storage_port, 8011, "Port of storage server");
+DEFINE_int32(storage_idle_timeout, -1, "Idle timeout of storage server");
+DEFINE_int32(storage_thread_num, 4, "Worker threads");
+
+namespace {
+
+rpc::Status ToStatus(bool ok, const std::string& msg = {}) {
+    rpc::Status st;
+    st.set_code(ok ? 0 : 1);
+    st.set_message(ok ? "" : msg);
+    return st;
+}
+
+std::shared_ptr<Inode> DeserializeInode(const rpc::InodeBlob& blob) {
+    size_t off = 0;
+    Inode inode;
+    if (!Inode::deserialize(reinterpret_cast<const uint8_t*>(blob.data().data()),
+                            off, inode, blob.data().size())) {
+        return nullptr;
+    }
+    return std::make_shared<Inode>(inode);
+}
+
+void SerializeInode(const Inode& inode, rpc::InodeBlob* out) {
+    auto data = inode.serialize();
+    out->set_data(data.data(), data.size());
+}
+
+std::shared_ptr<Volume> DeserializeVolume(const rpc::VolumeBlob& blob) {
+    auto vol = Volume::deserialize(reinterpret_cast<const uint8_t*>(blob.data().data()),
+                                   blob.data().size());
+    if (!vol) return nullptr;
+    return std::shared_ptr<Volume>(std::move(vol));
+}
+
+} // namespace
+
+class StorageServiceImpl : public rpc::StorageService {
+public:
+    StorageServiceImpl() {
+        volume_manager_ = std::make_shared<VolumeManager>();
+        volume_manager_->set_default_gateway(std::make_shared<LocalStorageGateway>());
+    }
+
+    void RegisterVolume(::google::protobuf::RpcController*,
+                        const rpc::RegisterVolumeRequest* request,
+                        rpc::Status* response,
+                        ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard guard(done);
+        auto vol = DeserializeVolume(request->volume());
+        if (!vol) {
+            response->CopyFrom(ToStatus(false, "volume deserialize failed"));
+            return;
+        }
+        volume_manager_->register_volume(vol);
+        response->CopyFrom(ToStatus(true));
+    }
+
+    void WriteFile(::google::protobuf::RpcController*,
+                   const rpc::IORequest* request,
+                   rpc::WriteReply* response,
+                   ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard guard(done);
+        auto inode = DeserializeInode(request->inode());
+        if (!inode) {
+            response->mutable_status()->CopyFrom(ToStatus(false, "inode deserialize failed"));
+            return;
+        }
+        ssize_t bytes = volume_manager_->write_file(inode,
+                                                    request->offset(),
+                                                    request->data().data(),
+                                                    request->data().size());
+        if (bytes < 0) {
+            response->mutable_status()->CopyFrom(ToStatus(false, "write failed"));
+            response->set_bytes(bytes);
+            return;
+        }
+        response->set_bytes(bytes);
+        SerializeInode(*inode, response->mutable_inode());
+        response->mutable_status()->CopyFrom(ToStatus(true));
+    }
+
+    void ReadFile(::google::protobuf::RpcController*,
+                  const rpc::IORequest* request,
+                  rpc::ReadReply* response,
+                  ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard guard(done);
+        auto inode = DeserializeInode(request->inode());
+        if (!inode) {
+            response->mutable_status()->CopyFrom(ToStatus(false, "inode deserialize failed"));
+            return;
+        }
+        std::string buf(request->data().size(), '\0');
+        ssize_t bytes = volume_manager_->read_file(inode,
+                                                   request->offset(),
+                                                   buf.data(),
+                                                   buf.size());
+        if (bytes < 0) {
+            response->mutable_status()->CopyFrom(ToStatus(false, "read failed"));
+            response->set_bytes(bytes);
+            return;
+        }
+        response->set_bytes(bytes);
+        response->set_data(buf.data(), static_cast<size_t>(bytes));
+        SerializeInode(*inode, response->mutable_inode());
+        response->mutable_status()->CopyFrom(ToStatus(true));
+    }
+
+    void ReleaseInodeBlocks(::google::protobuf::RpcController*,
+                            const rpc::InodeBlob* request,
+                            rpc::Status* response,
+                            ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard guard(done);
+        auto inode = DeserializeInode(*request);
+        bool ok = inode && volume_manager_->release_inode_blocks(inode);
+        response->CopyFrom(ToStatus(ok));
+    }
+
+private:
+    std::shared_ptr<VolumeManager> volume_manager_;
+};
+
+int main(int argc, char* argv[]) {
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
+    brpc::Server server;
+    StorageServiceImpl svc;
+    if (server.AddService(&svc, brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+        std::cerr << "Failed to add storage service" << std::endl;
+        return -1;
+    }
+    brpc::ServerOptions options;
+    options.idle_timeout_sec = FLAGS_storage_idle_timeout;
+    options.num_threads = FLAGS_storage_thread_num;
+    if (server.Start(FLAGS_storage_port, &options) != 0) {
+        std::cerr << "Failed to start storage server" << std::endl;
+        return -1;
+    }
+    std::cout << "Storage server listening on " << FLAGS_storage_port << std::endl;
+    server.RunUntilAskedToQuit();
+    return 0;
+}

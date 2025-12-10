@@ -1,0 +1,37 @@
+syntax = "proto3";
+package rpc;
+
+import "rpc_common.proto";
+
+message Empty {}
+
+message RegisterVolumeRequest {
+  VolumeBlob volume = 1;
+  uint32 type = 2;
+}
+
+message IORequest {
+  InodeBlob inode = 1;
+  uint64 offset = 2;
+  bytes data = 3; // for write: payload; for read: size only
+}
+
+message WriteReply {
+  Status status = 1;
+  int64 bytes = 2;
+  InodeBlob inode = 3; // updated inode
+}
+
+message ReadReply {
+  Status status = 1;
+  int64 bytes = 2;
+  bytes data = 3;
+  InodeBlob inode = 4;
+}
+
+service StorageService {
+  rpc RegisterVolume(RegisterVolumeRequest) returns (Status);
+  rpc WriteFile(IORequest) returns (WriteReply);
+  rpc ReadFile(IORequest) returns (ReadReply);
+  rpc ReleaseInodeBlocks(InodeBlob) returns (Status);
+}

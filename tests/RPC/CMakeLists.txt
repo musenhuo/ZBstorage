@@ -12,6 +12,10 @@ find_library(BRPC_LIB brpc)
 if(NOT BRPC_LIB)
   message(FATAL_ERROR "brpc library not found. Please install brpc or set BRPC_LIB.")
 endif()
+find_library(GFLAGS_LIB gflags)
+if(NOT GFLAGS_LIB)
+  message(FATAL_ERROR "gflags library not found. Please install gflags.")
+endif()
 
 set(PROTO_FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/proto/rpc_common.proto
@@ -23,47 +27,49 @@ set(PROTO_FILES
 set(PROTOBUF_IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
 
+set(REPO_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/proto
   ${CMAKE_CURRENT_SOURCE_DIR}/server
   ${CMAKE_CURRENT_SOURCE_DIR}/client
-  ${PROJECT_SOURCE_DIR}/../src
-  ${PROJECT_SOURCE_DIR}/../src/storagenode
-  ${PROJECT_SOURCE_DIR}/../src/storagenode/hard_disc
-  ${PROJECT_SOURCE_DIR}/../src/fs
-  ${PROJECT_SOURCE_DIR}/../src/mds
-  ${PROJECT_SOURCE_DIR}/../src/debug
-  ${PROJECT_SOURCE_DIR}/../src/srm
-  ${PROJECT_SOURCE_DIR}/../third_party
+  ${REPO_ROOT}/src
+  ${REPO_ROOT}/src/storagenode
+  ${REPO_ROOT}/src/storagenode/hard_disc
+  ${REPO_ROOT}/src/fs
+  ${REPO_ROOT}/src/mds
+  ${REPO_ROOT}/src/debug
+  ${REPO_ROOT}/src/srm
+  ${REPO_ROOT}/third_party
 )
 
 set(COMMON_SRCS
-  ${PROJECT_SOURCE_DIR}/../src/storagenode/optical/OpticalDiscLibrary.cpp
-  ${PROJECT_SOURCE_DIR}/../src/storagenode/optical/OpticalDisc.cpp
-  ${PROJECT_SOURCE_DIR}/../src/storagenode/StoreageNode.cpp
-  ${PROJECT_SOURCE_DIR}/../src/storagenode/hard_disc/SSD.cpp
-  ${PROJECT_SOURCE_DIR}/../src/storagenode/hard_disc/HDD.cpp
-  ${PROJECT_SOURCE_DIR}/../src/fs/block/BlockManager.cpp
-  ${PROJECT_SOURCE_DIR}/../src/fs/volume/Volume.cpp
-  ${PROJECT_SOURCE_DIR}/../src/fs/volume/StorageResourceGlobal.cpp
-  ${PROJECT_SOURCE_DIR}/../src/fs/volume/VolumeManager.cpp
-  ${PROJECT_SOURCE_DIR}/../src/fs/volume/VolumeRegistry.cpp
-  ${PROJECT_SOURCE_DIR}/../src/fs/VFS/VFS_new.cpp
-  ${PROJECT_SOURCE_DIR}/../src/fs/io/LocalStorageGateway.cpp
-  ${PROJECT_SOURCE_DIR}/../src/srm/storage_manager/StorageResource.cpp
-  ${PROJECT_SOURCE_DIR}/../src/mds/server/Server.cpp
-  ${PROJECT_SOURCE_DIR}/../src/mds/server/DirectoryLockTable.cpp
-  ${PROJECT_SOURCE_DIR}/../src/mds/server/DirStore.cpp
-  ${PROJECT_SOURCE_DIR}/../src/mds/allocator/VolumeAllocator.cpp
-  ${PROJECT_SOURCE_DIR}/../src/mds/metadataserver/MetadataManager.cpp
-  ${PROJECT_SOURCE_DIR}/../src/mds/metadataserver/KVStore.cpp
-  ${PROJECT_SOURCE_DIR}/../src/mds/collector/collector.cpp
-  ${PROJECT_SOURCE_DIR}/../src/srm/image_manager/ImageManager.cpp
-  ${PROJECT_SOURCE_DIR}/../src/mds/inode/inode.cpp
-  ${PROJECT_SOURCE_DIR}/../src/mds/inode/InodeStorage.cpp
-  ${PROJECT_SOURCE_DIR}/../src/mds/inode/InodeTimestamp.cpp
-  ${PROJECT_SOURCE_DIR}/../src/debug/ZBLog.cpp
+  ${REPO_ROOT}/src/storagenode/optical/OpticalDiscLibrary.cpp
+  ${REPO_ROOT}/src/storagenode/optical/OpticalDisc.cpp
+  ${REPO_ROOT}/src/storagenode/StoreageNode.cpp
+  ${REPO_ROOT}/src/storagenode/hard_disc/SSD.cpp
+  ${REPO_ROOT}/src/storagenode/hard_disc/HDD.cpp
+  ${REPO_ROOT}/src/fs/block/BlockManager.cpp
+  ${REPO_ROOT}/src/fs/volume/Volume.cpp
+  ${REPO_ROOT}/src/fs/volume/StorageResourceGlobal.cpp
+  ${REPO_ROOT}/src/fs/volume/VolumeManager.cpp
+  ${REPO_ROOT}/src/fs/volume/VolumeRegistry.cpp
+  ${REPO_ROOT}/src/fs/VFS/VFS_new.cpp
+  ${REPO_ROOT}/src/fs/io/LocalStorageGateway.cpp
+  ${REPO_ROOT}/src/srm/storage_manager/StorageResource.cpp
+  ${REPO_ROOT}/src/mds/server/Server.cpp
+  ${REPO_ROOT}/src/mds/server/DirectoryLockTable.cpp
+  ${REPO_ROOT}/src/mds/server/DirStore.cpp
+  ${REPO_ROOT}/src/mds/allocator/VolumeAllocator.cpp
+  ${REPO_ROOT}/src/mds/metadataserver/MetadataManager.cpp
+  ${REPO_ROOT}/src/mds/metadataserver/KVStore.cpp
+  ${REPO_ROOT}/src/mds/collector/collector.cpp
+  ${REPO_ROOT}/src/srm/image_manager/ImageManager.cpp
+  ${REPO_ROOT}/src/mds/inode/inode.cpp
+  ${REPO_ROOT}/src/mds/inode/InodeStorage.cpp
+  ${REPO_ROOT}/src/mds/inode/InodeTimestamp.cpp
+  ${REPO_ROOT}/src/debug/ZBLog.cpp
 )
 
 add_library(rpc_proto ${PROTO_SRCS} ${PROTO_HDRS})
@@ -73,22 +79,22 @@ add_executable(mds_rpc_server
   server/mds_service_impl.cpp
   ${COMMON_SRCS}
 )
-target_link_libraries(mds_rpc_server PRIVATE rpc_proto ${Protobuf_LIBRARIES} ${BRPC_LIB})
+target_link_libraries(mds_rpc_server PRIVATE rpc_proto ${Protobuf_LIBRARIES} ${BRPC_LIB} ${GFLAGS_LIB})
 
 add_executable(storage_rpc_server
   server/storage_service_impl.cpp
   ${COMMON_SRCS}
 )
-target_link_libraries(storage_rpc_server PRIVATE rpc_proto ${Protobuf_LIBRARIES} ${BRPC_LIB})
+target_link_libraries(storage_rpc_server PRIVATE rpc_proto ${Protobuf_LIBRARIES} ${BRPC_LIB} ${GFLAGS_LIB})
 
 add_executable(vfs_rpc_server
   server/vfs_service_impl.cpp
   ${COMMON_SRCS}
 )
-target_link_libraries(vfs_rpc_server PRIVATE rpc_proto ${Protobuf_LIBRARIES} ${BRPC_LIB})
+target_link_libraries(vfs_rpc_server PRIVATE rpc_proto ${Protobuf_LIBRARIES} ${BRPC_LIB} ${GFLAGS_LIB})
 
 add_executable(rpc_client
   client/VFS_dist.cpp
   ${COMMON_SRCS}
 )
-target_link_libraries(rpc_client PRIVATE rpc_proto ${Protobuf_LIBRARIES} ${BRPC_LIB})
+target_link_libraries(rpc_client PRIVATE rpc_proto ${Protobuf_LIBRARIES} ${BRPC_LIB} ${GFLAGS_LIB})

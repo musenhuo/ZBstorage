@@ -26,7 +26,13 @@ namespace {
 void LogRequest(const std::string& api, const std::string& detail, const rpc::Status* st = nullptr) {
     std::cout << "[VFS RPC] " << api;
     if (!detail.empty()) std::cout << " " << detail;
-    if (st) std::cout << " -> code=" << st->code() << " msg=" << st->message();
+    if (st) {
+        std::string msg = st->message();
+        if (msg.empty()) {
+            msg = (st->code() == 0) ? "OK" : "<no-msg>";
+        }
+        std::cout << " -> code=" << st->code() << " msg=" << msg;
+    }
     std::cout << std::endl;
 }
 
@@ -111,7 +117,10 @@ public:
                 req.set_persist_now(false);
                 rpc::RegisterVolumeReply rep;
                 brpc::Controller creg;
-                RegisterVolume(&creg, &req, &rep, nullptr);
+                // 注册到 MDS（存储侧已在启动时注册到 VolumeManager）
+                rpc::MdsService_Stub mds_stub(&mds_channel_);
+                mds_stub.RegisterVolume(&creg, &req, &rep, nullptr);
+                LogRequest("RegisterVolume@startup", "type=" + std::to_string(v.type()), rep.mutable_status());
             }
         }
         // 如果没有任何卷，则补一个 fallback 卷（行为与 test_vfs_new 相同）
@@ -123,7 +132,9 @@ public:
             req.set_persist_now(false);
             rpc::RegisterVolumeReply rep;
             brpc::Controller creg;
-            RegisterVolume(&creg, &req, &rep, nullptr);
+            rpc::MdsService_Stub mds_stub(&mds_channel_);
+            mds_stub.RegisterVolume(&creg, &req, &rep, nullptr);
+            LogRequest("RegisterVolume@startup", "fallback uuid=" + fallback_vol->uuid(), rep.mutable_status());
         }
 
         // 2) 创建根目录（失败则尝试重建 inode 表后重试）

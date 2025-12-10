@@ -19,7 +19,13 @@ namespace {
 void LogRequest(const std::string& api, const std::string& detail, const rpc::Status* st = nullptr) {
     std::cout << "[Storage RPC] " << api;
     if (!detail.empty()) std::cout << " " << detail;
-    if (st) std::cout << " -> code=" << st->code() << " msg=" << st->message();
+    if (st) {
+        std::string msg = st->message();
+        if (msg.empty()) {
+            msg = (st->code() == 0) ? "OK" : "<no-msg>";
+        }
+        std::cout << " -> code=" << st->code() << " msg=" << msg;
+    }
     std::cout << std::endl;
 }
 
@@ -68,6 +74,19 @@ public:
         resource_.loadFromFile(false, false);
         volume_manager_ = std::make_shared<VolumeManager>();
         volume_manager_->set_default_gateway(std::make_shared<LocalStorageGateway>());
+        // Initialize all node volumes once and register into VolumeManager, also cache for ListAllVolumes.
+        while (true) {
+            auto pair = resource_.initOneNodeVolume();
+            if (!pair.first && !pair.second) break;
+            if (pair.first) {
+                volume_manager_->register_volume(pair.first);
+                volume_cache_.push_back({pair.first, VolumeType::SSD});
+            }
+            if (pair.second) {
+                volume_manager_->register_volume(pair.second);
+                volume_cache_.push_back({pair.second, VolumeType::HDD});
+            }
+        }
     }
 
     void RegisterVolume(::google::protobuf::RpcController*,
@@ -91,26 +110,12 @@ public:
                         rpc::VolumeListReply* response,
                         ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard guard(done);
-        std::vector<rpc::VolumeInfo> vols;
-        while (true) {
-            auto pair = resource_.initOneNodeVolume();
-            if (!pair.first && !pair.second) break;
-            if (pair.first) {
-                rpc::VolumeInfo info;
-                SerializeVolume(*pair.first, info.mutable_volume());
-                info.set_type(static_cast<uint32_t>(VolumeType::SSD));
-                vols.push_back(std::move(info));
-            }
-            if (pair.second) {
-                rpc::VolumeInfo info;
-                SerializeVolume(*pair.second, info.mutable_volume());
-                info.set_type(static_cast<uint32_t>(VolumeType::HDD));
-                vols.push_back(std::move(info));
-            }
-        }
-        for (auto& v : vols) {
+        for (const auto& v : volume_cache_) {
+            rpc::VolumeInfo info;
+            SerializeVolume(*v.volume, info.mutable_volume());
+            info.set_type(static_cast<uint32_t>(v.type));
             auto* out = response->add_volumes();
-            out->Swap(&v);
+            out->Swap(&info);
         }
         auto st = ToStatus(true);
         response->mutable_status()->CopyFrom(st);
@@ -187,6 +192,11 @@ public:
 private:
     std::shared_ptr<VolumeManager> volume_manager_;
     StorageResource resource_;
+    struct VolumeCacheEntry {
+        std::shared_ptr<Volume> volume;
+        VolumeType type;
+    };
+    std::vector<VolumeCacheEntry> volume_cache_;
 };
 
 int main(int argc, char* argv[]) {

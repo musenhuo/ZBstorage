@@ -70,6 +70,12 @@ public:
         const std::string bitmap_path = base_dir_ + "/bitmap.dat";
         const std::string dir_store = base_dir_ + "/dir_store";
         std::filesystem::create_directories(dir_store, ec);
+        if (create_new) {
+            std::filesystem::remove(inode_path, ec);
+            std::filesystem::remove(bitmap_path, ec);
+            std::filesystem::remove_all(dir_store, ec);
+            std::filesystem::create_directories(dir_store, ec);
+        }
         mds_ = std::make_shared<MdsServer>(inode_path, bitmap_path, dir_store, create_new);
         mds_->set_volume_registry(make_file_volume_registry(base_dir_));
     }

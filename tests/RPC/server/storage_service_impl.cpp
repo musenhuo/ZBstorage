@@ -58,6 +58,8 @@ public:
     StorageServiceImpl() {
         // Ensure global storage resource is visible to LocalStorageGateway before any IO.
         g_storage_resource = &resource_;
+        // Load storage nodes and pending volumes from file (same as test_vfs_new).
+        resource_.loadFromFile(false, false);
         volume_manager_ = std::make_shared<VolumeManager>();
         volume_manager_->set_default_gateway(std::make_shared<LocalStorageGateway>());
     }
@@ -76,6 +78,37 @@ public:
         volume_manager_->register_volume(vol);
         response->CopyFrom(ToStatus(true));
         LogRequest("RegisterVolume", vol->uuid(), response);
+    }
+
+    void ListAllVolumes(::google::protobuf::RpcController*,
+                        const rpc::Empty*,
+                        rpc::VolumeListReply* response,
+                        ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard guard(done);
+        std::vector<rpc::VolumeInfo> vols;
+        while (true) {
+            auto pair = resource_.initOneNodeVolume();
+            if (!pair.first && !pair.second) break;
+            if (pair.first) {
+                rpc::VolumeInfo info;
+                SerializeVolume(*pair.first, info.mutable_volume());
+                info.set_type(static_cast<uint32_t>(VolumeType::SSD));
+                vols.push_back(std::move(info));
+            }
+            if (pair.second) {
+                rpc::VolumeInfo info;
+                SerializeVolume(*pair.second, info.mutable_volume());
+                info.set_type(static_cast<uint32_t>(VolumeType::HDD));
+                vols.push_back(std::move(info));
+            }
+        }
+        for (auto& v : vols) {
+            auto* out = response->add_volumes();
+            out->Swap(&v);
+        }
+        auto st = ToStatus(true);
+        response->mutable_status()->CopyFrom(st);
+        LogRequest("ListAllVolumes", "count=" + std::to_string(response->volumes_size()), &st);
     }
 
     void WriteFile(::google::protobuf::RpcController*,

@@ -90,11 +90,50 @@ public:
                  rpc::Status* response,
                  ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard guard(done);
+        // 1) 获取存储侧的卷列表并注册
+        rpc::StorageService_Stub storage_stub(&storage_channel_);
+        rpc::VolumeListReply vol_reply;
+        brpc::Controller cvol;
+        rpc::Empty empty;
+        storage_stub.ListAllVolumes(&cvol, &empty, &vol_reply, nullptr);
+        if (vol_reply.status().code() == 0) {
+            for (const auto& v : vol_reply.volumes()) {
+                rpc::RegisterVolumeRequest req;
+                req.mutable_volume()->CopyFrom(v.volume());
+                req.set_type(v.type());
+                req.set_persist_now(false);
+                rpc::RegisterVolumeReply rep;
+                brpc::Controller creg;
+                RegisterVolume(&creg, &req, &rep, nullptr);
+            }
+        }
+        // 如果没有任何卷，则补一个 fallback 卷（行为与 test_vfs_new 相同）
+        if (vol_reply.volumes_size() == 0) {
+            auto fallback_vol = std::make_shared<Volume>("vol-1", "node-1", 4096);
+            rpc::RegisterVolumeRequest req;
+            SerializeVolume(*fallback_vol, req.mutable_volume());
+            req.set_type(static_cast<uint32_t>(VolumeType::SSD));
+            req.set_persist_now(false);
+            rpc::RegisterVolumeReply rep;
+            brpc::Controller creg;
+            RegisterVolume(&creg, &req, &rep, nullptr);
+        }
+
+        // 2) 创建根目录（失败则尝试重建 inode 表后重试）
         rpc::MdsService_Stub stub(&mds_channel_);
         rpc::Status st;
         brpc::Controller cntl;
-        rpc::Empty empty;
         stub.CreateRoot(&cntl, &empty, &st, nullptr);
+        if (st.code() != 0) {
+            // 如果 root 创建失败，尝试重建 inode 表后再试一次
+            rpc::Status rebuild;
+            brpc::Controller c2;
+            stub.RebuildInodeTable(&c2, &empty, &rebuild, nullptr);
+            if (rebuild.code() == 0) {
+                brpc::Controller c3;
+                stub.CreateRoot(&c3, &empty, &st, nullptr);
+            }
+        }
         response->CopyFrom(st);
         LogRequest("Startup", "", response);
     }

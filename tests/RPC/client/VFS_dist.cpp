@@ -5,8 +5,6 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include "../../../src/fs/volume/Volume.h"
-#include "../../../src/fs/volume/VolumeRegistry.h"
 #include "vfs.pb.h"
 #include "rpc_common.pb.h"
 #include "../../../src/mds/inode/inode.h"
@@ -44,14 +42,6 @@ bool expect(bool cond, const std::string& msg) {
     return cond;
 }
 
-rpc::VolumeBlob make_volume_blob(const std::shared_ptr<Volume>& vol) {
-    rpc::VolumeBlob vb;
-    if (!vol) return vb;
-    auto data = vol->serialize();
-    vb.set_data(data.data(), data.size());
-    return vb;
-}
-
 } // namespace
 
 int main(int argc, char** argv) {
@@ -77,17 +67,6 @@ int main(int argc, char** argv) {
     brpc::Controller c1;
     stub.CreateRootDirectory(&c1, &empty, &st, nullptr);
     if (!expect(st.code() == 0, "create_root_directory")) return 2;
-
-    // Register a synthetic volume to satisfy allocator
-    auto fallback_vol = std::make_shared<Volume>("vol-1", "node-1", 4096);
-    rpc::RegisterVolumeRequest reg_req;
-    *reg_req.mutable_volume() = make_volume_blob(fallback_vol);
-    reg_req.set_type(static_cast<uint32_t>(VolumeType::SSD));
-    reg_req.set_persist_now(false);
-    rpc::RegisterVolumeReply reg_rep;
-    brpc::Controller cvol;
-    stub.RegisterVolume(&cvol, &reg_req, &reg_rep, nullptr);
-    if (!expect(reg_rep.status().code() == 0, "register_volume fallback")) return 3;
 
     // mkdir /test
     rpc::PathModeRequest pmk;

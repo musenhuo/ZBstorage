@@ -30,9 +30,21 @@ message StorageReadReply {
   InodeBlob inode = 4;
 }
 
+message VolumeInfo {
+  VolumeBlob volume = 1;
+  uint32 type = 2; // VolumeType enum index
+}
+
+message VolumeListReply {
+  Status status = 1;
+  repeated VolumeInfo volumes = 2;
+}
+
 service StorageService {
   rpc RegisterVolume(StorageRegisterVolumeRequest) returns (Status);
   rpc WriteFile(StorageIORequest) returns (StorageWriteReply);
   rpc ReadFile(StorageIORequest) returns (StorageReadReply);
   rpc ReleaseInodeBlocks(InodeBlob) returns (Status);
+  // Enumerate volumes initialized from StorageResource (initOneNodeVolume loop)
+  rpc ListAllVolumes(Empty) returns (VolumeListReply);
 }

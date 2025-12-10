@@ -4,6 +4,8 @@ package rpc;
 import "rpc_common.proto";
 import "mds.proto";
 
+option cc_generic_services = true;
+
 message OpenRequest {
   string path = 1;
   int32 flags = 2;

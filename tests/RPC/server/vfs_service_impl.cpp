@@ -86,7 +86,8 @@ public:
         rpc::MdsService_Stub stub(&mds_channel_);
         rpc::Status st;
         brpc::Controller cntl;
-        stub.CreateRoot(&cntl, &rpc::Empty(), &st, nullptr);
+        rpc::Empty empty;
+        stub.CreateRoot(&cntl, &empty, &st, nullptr);
         response->CopyFrom(st);
     }
 
@@ -183,7 +184,7 @@ public:
         rpc::StorageService_Stub storage_stub(&storage_channel_);
         rpc::Status st_storage;
         brpc::Controller c1;
-        rpc::RegisterVolumeRequest storage_req;
+        rpc::StorageRegisterVolumeRequest storage_req;
         storage_req.mutable_volume()->CopyFrom(request->volume());
         storage_req.set_type(request->type());
         storage_stub.RegisterVolume(&c1, &storage_req, &st_storage, nullptr);
@@ -411,11 +412,11 @@ private:
             inode = entry->inode;
         }
         rpc::StorageService_Stub storage_stub(&storage_channel_);
-        rpc::IORequest req;
+        rpc::StorageIORequest req;
         SerializeInode(*inode, req.mutable_inode());
         req.set_offset(offset);
         req.set_data(buf, count);
-        rpc::WriteReply reply;
+        rpc::StorageWriteReply reply;
         brpc::Controller cntl;
         storage_stub.WriteFile(&cntl, &req, &reply, nullptr);
         if (reply.status().code() != 0) return reply.bytes();
@@ -457,11 +458,11 @@ private:
             inode = entry->inode;
         }
         rpc::StorageService_Stub storage_stub(&storage_channel_);
-        rpc::IORequest req;
+        rpc::StorageIORequest req;
         SerializeInode(*inode, req.mutable_inode());
         req.set_offset(offset);
         req.set_data("", count); // only size matters for read
-        rpc::ReadReply reply;
+        rpc::StorageReadReply reply;
         brpc::Controller cntl;
         storage_stub.ReadFile(&cntl, &req, &reply, nullptr);
         if (reply.status().code() != 0) return reply.bytes();

@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include "../../../src/fs/volume/Volume.h"
+#include "../../../src/fs/volume/VolumeRegistry.h"
 #include "vfs.pb.h"
 #include "rpc_common.pb.h"
 #include "../../../src/mds/inode/inode.h"
@@ -67,13 +68,14 @@ int main(int argc, char** argv) {
     TempDir tmp;
     std::cout << "RPC VFS test tempdir: " << tmp.path << std::endl;
 
+    rpc::Empty empty;
     rpc::Status st;
     brpc::Controller c0;
-    stub.Startup(&c0, &rpc::Empty(), &st, nullptr);
+    stub.Startup(&c0, &empty, &st, nullptr);
     if (!expect(st.code() == 0, "startup")) return 1;
 
     brpc::Controller c1;
-    stub.CreateRootDirectory(&c1, &rpc::Empty(), &st, nullptr);
+    stub.CreateRootDirectory(&c1, &empty, &st, nullptr);
     if (!expect(st.code() == 0, "create_root_directory")) return 2;
 
     // Register a synthetic volume to satisfy allocator
@@ -268,7 +270,7 @@ int main(int argc, char** argv) {
 
     rpc::Status stshut;
     brpc::Controller c26;
-    stub.Shutdown(&c26, &rpc::Empty(), &stshut, nullptr);
+    stub.Shutdown(&c26, &empty, &stshut, nullptr);
     if (!expect(stshut.code() == 0, "shutdown")) return 29;
 
     std::cout << "VFS_new RPC integration test passed" << std::endl;

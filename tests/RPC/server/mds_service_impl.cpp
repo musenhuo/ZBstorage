@@ -121,7 +121,7 @@ public:
             ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard guard(done);
         auto inode = mds_->FindInodeByPath(request->path());
-        if (!inode || inode->getFileType() != FileType::Directory) {
+        if (!inode || inode->file_mode.fields.file_type != static_cast<uint16_t>(FileType::Directory)) {
             response->mutable_status()->CopyFrom(ToStatus(false, "not directory"));
             return;
         }

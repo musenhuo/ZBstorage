@@ -52,7 +52,7 @@ public:
     }
 
     void RegisterVolume(::google::protobuf::RpcController*,
-                        const rpc::RegisterVolumeRequest* request,
+                        const rpc::StorageRegisterVolumeRequest* request,
                         rpc::Status* response,
                         ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard guard(done);
@@ -66,8 +66,8 @@ public:
     }
 
     void WriteFile(::google::protobuf::RpcController*,
-                   const rpc::IORequest* request,
-                   rpc::WriteReply* response,
+                   const rpc::StorageIORequest* request,
+                   rpc::StorageWriteReply* response,
                    ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard guard(done);
         auto inode = DeserializeInode(request->inode());
@@ -90,8 +90,8 @@ public:
     }
 
     void ReadFile(::google::protobuf::RpcController*,
-                  const rpc::IORequest* request,
-                  rpc::ReadReply* response,
+                  const rpc::StorageIORequest* request,
+                  rpc::StorageReadReply* response,
                   ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard guard(done);
         auto inode = DeserializeInode(request->inode());

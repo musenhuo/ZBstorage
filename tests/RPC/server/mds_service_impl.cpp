@@ -81,6 +81,13 @@ public:
             std::filesystem::remove(bitmap_path, ec);
             std::filesystem::remove_all(dir_store, ec);
             std::filesystem::create_directories(dir_store, ec);
+            // 清理卷注册与 KV 存储，确保无旧数据污染
+            std::filesystem::remove(base_dir_ + "/ssd.meta", ec);
+            std::filesystem::remove(base_dir_ + "/ssd.data", ec);
+            std::filesystem::remove(base_dir_ + "/hdd.meta", ec);
+            std::filesystem::remove(base_dir_ + "/hdd.data", ec);
+            std::filesystem::remove_all("/tmp/zbstorage_kv", ec);
+            std::filesystem::create_directories("/tmp/zbstorage_kv", ec);
         }
         mds_ = std::make_shared<MdsServer>(inode_path, bitmap_path, dir_store, create_new);
         mds_->set_volume_registry(make_file_volume_registry(base_dir_));

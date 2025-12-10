@@ -12,6 +12,8 @@
 #include "storage.pb.h"
 #include "../../../src/mds/inode/InodeTimestamp.h"
 #include "../../../src/fs/handle/handle.h"
+#include "../../../src/fs/volume/Volume.h"
+#include "../../../src/fs/volume/VolumeRegistry.h"
 
 DEFINE_int32(vfs_port, 8012, "Port of vfs server");
 DEFINE_int32(vfs_idle_timeout, -1, "Idle timeout of vfs server");
@@ -55,6 +57,11 @@ std::shared_ptr<Volume> DeserializeVolume(const rpc::VolumeBlob& blob) {
                                    blob.data().size());
     if (!vol) return nullptr;
     return std::shared_ptr<Volume>(std::move(vol));
+}
+
+void SerializeVolume(const Volume& vol, rpc::VolumeBlob* out) {
+    auto data = vol.serialize();
+    out->set_data(data.data(), data.size());
 }
 
 } // namespace

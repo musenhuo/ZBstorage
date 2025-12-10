@@ -6,6 +6,7 @@
 #include <iostream>
 #include "storage.pb.h"
 #include "../../../src/fs/volume/VolumeManager.h"
+#include "../../../src/fs/volume/VolumeRegistry.h"
 #include "../../../src/fs/io/LocalStorageGateway.h"
 #include "../../../src/srm/storage_manager/StorageResource.h"
 
@@ -49,6 +50,11 @@ std::shared_ptr<Volume> DeserializeVolume(const rpc::VolumeBlob& blob) {
                                    blob.data().size());
     if (!vol) return nullptr;
     return std::shared_ptr<Volume>(std::move(vol));
+}
+
+void SerializeVolume(const Volume& vol, rpc::VolumeBlob* out) {
+    auto data = vol.serialize();
+    out->set_data(data.data(), data.size());
 }
 
 } // namespace

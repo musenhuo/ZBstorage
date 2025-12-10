@@ -189,7 +189,10 @@ public:
             response->mutable_status()->CopyFrom(ToStatus(false, "bitmap null"));
             return;
         }
-        std::string bits = bitmap->to_string();
+        std::string bits(bitmap->size(), '0');
+        for (size_t i = 0; i < bitmap->size(); ++i) {
+            bits[i] = bitmap->test(i) ? '1' : '0';
+        }
         response->set_bitmap(bits);
         response->set_bit_count(bitmap->size());
         response->mutable_status()->CopyFrom(ToStatus(true));

@@ -281,7 +281,7 @@ void StorageServiceImpl::GetMetricsProm(::google::protobuf::RpcController* contr
     if (auto* cntl = dynamic_cast<brpc::Controller*>(controller)) {
         if (cntl->has_http_request()) {
             cntl->http_response().set_content_type("text/plain");
-            cntl->http_response().set_body(os.str());
+            cntl->response_attachment().append(os.str());
             handled_http = true;
         }
     }

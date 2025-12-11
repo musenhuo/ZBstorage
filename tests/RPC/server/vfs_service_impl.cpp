@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <algorithm>
 #include <sstream>
 #include "vfs.pb.h"
 #include "mds.pb.h"
@@ -639,7 +640,6 @@ private:
     }
 
 private:
-    friend class VfsMetricsHttpService;
     brpc::Channel mds_channel_;
     brpc::Channel storage_channel_;
     std::string mds_addr_;
@@ -648,12 +648,6 @@ private:
     boost::dynamic_bitset<> fd_bitmap_;
     std::mutex fd_mutex_;
 };
-
-void VfsMetricsHttpService::default_method(google::protobuf::RpcController*,
-                                           const brpc::HttpRequest*,
-                                           brpc::HttpResponse* res,
-                                           google::protobuf::Closure* done) {
-    brpc::ClosureGuard guard(done);
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
     brpc::Server server;

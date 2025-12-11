@@ -11,6 +11,7 @@
 #include "../../../src/fs/volume/VolumeRegistry.h"
 #include "../../../src/fs/io/LocalStorageGateway.h"
 #include "../../../src/srm/storage_manager/StorageResource.h"
+#include "../../../src/storagenode/optical/OpticalDiscLibrary.h"
 
 DEFINE_int32(storage_port, 8011, "Port of storage server");
 DEFINE_int32(storage_idle_timeout, -1, "Idle timeout of storage server");

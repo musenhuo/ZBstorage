@@ -148,6 +148,25 @@ void StorageServiceImpl::Read(::google::protobuf::RpcController* controller,
     Ok(status);
 }
 
+void StorageServiceImpl::UnmountDisk(::google::protobuf::RpcController* controller,
+                                     const storagenode::UnmountRequest* request,
+                                     storagenode::UnmountReply* response,
+                                     ::google::protobuf::Closure* done) {
+    (void)controller;
+    brpc::ClosureGuard guard(done);
+    auto* status = response->mutable_status();
+    if (!disk_manager_) {
+        FillStatus(status, EINVAL, "disk manager is null");
+        return;
+    }
+    if (!disk_manager_->Unmount()) {
+        FillStatus(status, EIO, "failed to unmount disk");
+        return;
+    }
+    ready_ = false;
+    Ok(status);
+}
+
 uint64_t StorageServiceImpl::ComputeChecksum(const void* data, size_t len) const {
     return butil::crc32c::Value(static_cast<const char*>(data), len);
 }

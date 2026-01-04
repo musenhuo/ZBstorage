@@ -15,6 +15,7 @@ add_executable(real_node_server
   server/StorageServiceImpl.cpp
   io/DiskManager.cpp
   io/IOEngine.cpp
+  agent/NodeAgent.cpp
 )
 
 add_executable(real_node_client

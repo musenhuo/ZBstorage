@@ -24,6 +24,7 @@ public:
     bool Prepare();
     bool IsMounted() const;
     bool Refresh();
+    bool Unmount();
     DiskStats Stats() const { return stats_; }
     const std::string& mount_point() const { return config_.mount_point; }
     const std::string& device_path() const { return config_.device_path; }

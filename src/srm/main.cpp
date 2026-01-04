@@ -1,46 +1,46 @@
-#include "storage_manager/StorageResource.h"
-#include <cstdio>
+#include <brpc/server.h>
+#include <gflags/gflags.h>
+
+#include <chrono>
 #include <iostream>
-#include <iomanip>
-#include "../fs/volume/Volume.h"
+#include <memory>
 
-// StorageResource 全局指针（在公共实现文件中定义）
-extern StorageResource* g_storage_resource;
+#include "ClusterManagerServiceImpl.h"
+#include "StorageNodeManager.h"
 
-int main(){
-    StorageResource resource;
-    g_storage_resource = &resource; // 设置全局资源指针，供 Volume 使用
+DEFINE_int32(srm_port, 9100, "Port for SRM cluster manager service");
+DEFINE_int32(heartbeat_timeout_sec, 30, "Heartbeat timeout in seconds");
+DEFINE_int32(health_check_interval_sec, 10, "Health monitor interval in seconds");
 
-    // 尝试从文件加载（若无文件，可考虑调用 generateResource()）
-    resource.loadFromFile();
-    resource.printInfo();
+int main(int argc, char** argv) {
+    gflags::ParseCommandLineFlags(&argc, &argv, true);
 
-    std::cout << "\n初始化并打印前 20 个卷的信息：\n";
-    for (int i = 0; i < 20; ++i) {
-        auto vols = resource.initOneNodeVolume(); // pair<shared_ptr<Volume>, shared_ptr<Volume>>
-        std::cout << "[#" << (i+1) << "] ";
+    auto manager = std::make_shared<StorageNodeManager>(
+        std::chrono::seconds(FLAGS_heartbeat_timeout_sec),
+        std::chrono::seconds(FLAGS_health_check_interval_sec));
+    manager->Start();
 
-        auto print_vol = [&](const std::shared_ptr<Volume>& v, const char* tag) {
-            if (!v) {
-                std::cout << tag << ": <null>  ";
-                return;
-            }
-            std::cout << tag << ": uuid=" << v->uuid()
-                      << " node=" << v->storage_node_id()
-                      << " total_blocks=" << v->total_blocks()
-                      << " used=" << v->used_blocks()
-                      << " usage=" << std::fixed << std::setprecision(2) << v->usage_percentage() << "%  ";
-        };
+    ClusterManagerServiceImpl service(manager);
 
-        print_vol(vols.first, "SSD");
-        print_vol(vols.second, "HDD");
-        std::cout << std::endl;
+    brpc::Server server;
+    if (server.AddService(&service, brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+        std::cerr << "Failed to add ClusterManagerService" << std::endl;
+        return -1;
     }
 
+    brpc::ServerOptions options;
+    options.idle_timeout_sec = -1;
+
+    if (server.Start(FLAGS_srm_port, &options) != 0) {
+        std::cerr << "Failed to start SRM server on port " << FLAGS_srm_port << std::endl;
+        return -1;
+    }
+
+    std::cout << "SRM ClusterManagerService started on port " << FLAGS_srm_port
+              << " heartbeat_timeout_sec=" << FLAGS_heartbeat_timeout_sec
+              << " health_check_interval_sec=" << FLAGS_health_check_interval_sec
+              << std::endl;
+    server.RunUntilAskedToQuit();
+    manager->Stop();
     return 0;
 }
-
-//功能性测试：1.十亿光盘资源管理 2.万级存储节点资源管理 3.光盘库节点管理 
-//1.光盘资源可生成，可导入，可更改
-//2.存储节点资源可生成，可导入，可初始化卷
-//3.光盘库节点可生成，可导入，可分配光盘到库

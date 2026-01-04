@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.10)
 
 find_package(Protobuf REQUIRED)
 
-set(PROTO_SRC ${CMAKE_CURRENT_SOURCE_DIR}/storage_node.proto)
+set(PROTO_SRC
+  ${CMAKE_CURRENT_SOURCE_DIR}/storage_node.proto
+  ${CMAKE_CURRENT_SOURCE_DIR}/cluster_manager.proto
+)
 
 # Allow imports like "../RPC/proto/..." used inside the proto.
 set(PROTOBUF_IMPORT_DIRS ${CMAKE_SOURCE_DIR}/src/msg)

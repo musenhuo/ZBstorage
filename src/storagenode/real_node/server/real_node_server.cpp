@@ -9,6 +9,7 @@
 #include "../io/DiskManager.h"
 #include "../io/IOEngine.h"
 #include "../meta/LocalMetadataManager.h"
+#include "../agent/NodeAgent.h"
 
 DEFINE_int32(port, 9010, "Port for storage real node server");
 DEFINE_string(device_path, "", "Block device path (e.g. /dev/sdb), optional if already mounted");
@@ -18,6 +19,11 @@ DEFINE_bool(auto_mount, false, "Whether to auto-mount device_path to mount_point
 DEFINE_bool(sync_on_write, false, "Whether to fsync after writes");
 DEFINE_bool(skip_mount, false, "Skip mounting/device checks and use mount_point/base_path directly");
 DEFINE_string(base_path, "", "Data root; default uses mount_point if empty");
+DEFINE_string(srm_addr, "", "SRM ClusterManagerService address host:port for registration/heartbeat");
+DEFINE_string(advertise_ip, "", "IP address to advertise to SRM (defaults to 127.0.0.1 if empty)");
+DEFINE_string(agent_hostname, "", "Optional hostname override reported to SRM");
+DEFINE_int32(agent_heartbeat_ms, 3000, "Heartbeat interval in milliseconds");
+DEFINE_int32(agent_register_backoff_ms, 5000, "Backoff between failed registrations in milliseconds");
 
 int main(int argc, char** argv) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
@@ -37,6 +43,16 @@ int main(int argc, char** argv) {
     auto metadata_mgr = std::make_shared<LocalMetadataManager>(std::vector<std::string>{data_root});
 
     StorageServiceImpl service(disk_mgr, metadata_mgr, io_engine);
+    std::unique_ptr<NodeAgent> agent;
+    if (!FLAGS_srm_addr.empty()) {
+        agent = std::make_unique<NodeAgent>(FLAGS_srm_addr,
+                                            static_cast<uint32_t>(FLAGS_port),
+                                            disk_mgr,
+                                            FLAGS_advertise_ip,
+                                            FLAGS_agent_hostname,
+                                            FLAGS_agent_heartbeat_ms,
+                                            FLAGS_agent_register_backoff_ms);
+    }
 
     brpc::Server server;
     if (server.AddService(&service, brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
@@ -52,10 +68,18 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    if (agent) {
+        agent->Start();
+    }
+
     std::cout << "Storage real node server started at port " << FLAGS_port
               << ", base_path=" << (FLAGS_base_path.empty() ? FLAGS_mount_point : FLAGS_base_path)
               << ", skip_mount=" << (FLAGS_skip_mount ? "true" : "false")
+              << ", srm_addr=" << (FLAGS_srm_addr.empty() ? "<disabled>" : FLAGS_srm_addr)
               << std::endl;
     server.RunUntilAskedToQuit();
+    if (agent) {
+        agent->Stop();
+    }
     return 0;
 }

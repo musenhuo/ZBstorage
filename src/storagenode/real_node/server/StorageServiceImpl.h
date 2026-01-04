@@ -25,6 +25,11 @@ public:
               storagenode::ReadReply* response,
               ::google::protobuf::Closure* done) override;
 
+    void UnmountDisk(::google::protobuf::RpcController* controller,
+                     const storagenode::UnmountRequest* request,
+                     storagenode::UnmountReply* response,
+                     ::google::protobuf::Closure* done) override;
+
 private:
     uint64_t ComputeChecksum(const void* data, size_t len) const;
     void FillStatus(rpc::Status* status, int err, const std::string& message) const;

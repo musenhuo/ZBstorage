@@ -121,6 +121,22 @@ bool DiskManager::MountIfRequired() {
 #endif
 }
 
+bool DiskManager::Unmount() {
+#ifdef __linux__
+    if (config_.mount_point.empty()) {
+        return false;
+    }
+    if (::umount(config_.mount_point.c_str()) != 0) {
+        int err = errno;
+        std::cerr << "DiskManager: umount failed (" << std::strerror(err) << ")" << std::endl;
+        return false;
+    }
+    return true;
+#else
+    return false;
+#endif
+}
+
 bool DiskManager::RefreshStats() {
 #ifdef __linux__
     struct statvfs st {};

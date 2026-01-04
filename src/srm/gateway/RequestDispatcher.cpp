@@ -34,9 +34,9 @@ public:
                                    real_cntl_->ErrorText());
         } else if (real_resp_) {
             client_resp_->set_bytes_written(real_resp_->bytes_written());
-            client_resp_->mutable_status()->set_code(
-                StatusUtils::NormalizeCode(real_resp_->status().code()));
-            client_resp_->mutable_status()->set_message(real_resp_->status().message());
+            StatusUtils::SetStatus(client_resp_->mutable_status(),
+                                   StatusUtils::NormalizeCode(real_resp_->status().code()),
+                                   real_resp_->status().message());
         } else {
             StatusUtils::SetStatus(client_resp_->mutable_status(),
                                    rpc::STATUS_UNKNOWN_ERROR,
@@ -80,9 +80,9 @@ public:
             client_resp_->set_bytes_read(real_resp_->bytes_read());
             client_resp_->mutable_data()->swap(*real_resp_->mutable_data());
             client_resp_->set_checksum(real_resp_->checksum());
-            client_resp_->mutable_status()->set_code(
-                StatusUtils::NormalizeCode(real_resp_->status().code()));
-            client_resp_->mutable_status()->set_message(real_resp_->status().message());
+            StatusUtils::SetStatus(client_resp_->mutable_status(),
+                                   StatusUtils::NormalizeCode(real_resp_->status().code()),
+                                   real_resp_->status().message());
         } else {
             StatusUtils::SetStatus(client_resp_->mutable_status(),
                                    rpc::STATUS_UNKNOWN_ERROR,

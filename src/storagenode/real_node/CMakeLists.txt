@@ -16,6 +16,7 @@ add_executable(real_node_server
   io/DiskManager.cpp
   io/IOEngine.cpp
   agent/NodeAgent.cpp
+  ${CMAKE_SOURCE_DIR}/src/common/StatusUtils.cpp
 )
 
 add_executable(real_node_client

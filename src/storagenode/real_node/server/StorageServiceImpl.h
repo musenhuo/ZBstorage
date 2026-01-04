@@ -5,6 +5,7 @@
 #include <string>
 
 #include "storage_node.pb.h"
+#include "common/StatusUtils.h"
 #include "../io/DiskManager.h"
 #include "../io/IOEngine.h"
 #include "../meta/LocalMetadataManager.h"
@@ -32,7 +33,6 @@ public:
 
 private:
     uint64_t ComputeChecksum(const void* data, size_t len) const;
-    void FillStatus(rpc::Status* status, int err, const std::string& message) const;
 
     std::shared_ptr<DiskManager> disk_manager_;
     std::shared_ptr<LocalMetadataManager> metadata_mgr_;

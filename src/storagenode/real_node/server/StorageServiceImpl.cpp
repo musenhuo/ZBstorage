@@ -14,8 +14,7 @@
 namespace {
 
 rpc::Status* Ok(rpc::Status* status) {
-    status->set_code(0);
-    status->set_message("");
+    StatusUtils::SetStatus(status, rpc::STATUS_SUCCESS, "");
     return status;
 }
 
@@ -42,21 +41,21 @@ void StorageServiceImpl::Write(::google::protobuf::RpcController* controller,
     brpc::ClosureGuard guard(done);
     auto* status = response->mutable_status();
     if (!ready_) {
-        FillStatus(status, EIO, "disk not ready");
+        StatusUtils::SetStatus(status, rpc::STATUS_IO_ERROR, "disk not ready");
         return;
     }
     if (!metadata_mgr_) {
-        FillStatus(status, EINVAL, "metadata manager is null");
+        StatusUtils::SetStatus(status, rpc::STATUS_INVALID_ARGUMENT, "metadata manager is null");
         return;
     }
     if (!io_engine_) {
-        FillStatus(status, EINVAL, "io engine is null");
+        StatusUtils::SetStatus(status, rpc::STATUS_INVALID_ARGUMENT, "io engine is null");
         return;
     }
     if (request->checksum() != 0) {
         uint64_t actual = ComputeChecksum(request->data().data(), request->data().size());
         if (actual != request->checksum()) {
-            FillStatus(status, EINVAL, "payload checksum mismatch");
+            StatusUtils::SetStatus(status, rpc::STATUS_INVALID_ARGUMENT, "payload checksum mismatch");
             return;
         }
     }
@@ -64,7 +63,7 @@ void StorageServiceImpl::Write(::google::protobuf::RpcController* controller,
     if (path.empty()) {
         path = metadata_mgr_->AllocPath(request->chunk_id());
         if (path.empty()) {
-            FillStatus(status, EIO, "failed to allocate path");
+            StatusUtils::SetStatus(status, rpc::STATUS_IO_ERROR, "failed to allocate path");
             return;
         }
     }
@@ -86,7 +85,8 @@ void StorageServiceImpl::Write(::google::protobuf::RpcController* controller,
                                  mode);
     if (res.bytes < 0 || res.err != 0) {
         int err = res.err != 0 ? res.err : EIO;
-        FillStatus(status, err, res.err != 0 ? "" : "write failed");
+        StatusUtils::SetStatus(status, StatusUtils::FromErrno(err),
+                               res.err != 0 ? std::strerror(err) : "write failed");
         return;
     }
     response->set_bytes_written(static_cast<uint64_t>(res.bytes));
@@ -101,21 +101,21 @@ void StorageServiceImpl::Read(::google::protobuf::RpcController* controller,
     brpc::ClosureGuard guard(done);
     auto* status = response->mutable_status();
     if (!ready_) {
-        FillStatus(status, EIO, "disk not ready");
+        StatusUtils::SetStatus(status, rpc::STATUS_IO_ERROR, "disk not ready");
         return;
     }
     if (!metadata_mgr_) {
-        FillStatus(status, EINVAL, "metadata manager is null");
+        StatusUtils::SetStatus(status, rpc::STATUS_INVALID_ARGUMENT, "metadata manager is null");
         return;
     }
     if (!io_engine_) {
-        FillStatus(status, EINVAL, "io engine is null");
+        StatusUtils::SetStatus(status, rpc::STATUS_INVALID_ARGUMENT, "io engine is null");
         return;
     }
 
     std::string path = metadata_mgr_->GetPath(request->chunk_id());
     if (path.empty()) {
-        FillStatus(status, ENOENT, "chunk not found");
+        StatusUtils::SetStatus(status, rpc::STATUS_NODE_NOT_FOUND, "chunk not found");
         return;
     }
 
@@ -137,7 +137,8 @@ void StorageServiceImpl::Read(::google::protobuf::RpcController* controller,
                                 flags);
     if (res.bytes < 0 || res.err != 0) {
         int err = res.err != 0 ? res.err : EIO;
-        FillStatus(status, err, res.err != 0 ? "" : "read failed");
+        StatusUtils::SetStatus(status, StatusUtils::FromErrno(err),
+                               res.err != 0 ? std::strerror(err) : "read failed");
         return;
     }
     response->set_bytes_read(static_cast<uint64_t>(res.bytes));
@@ -156,11 +157,11 @@ void StorageServiceImpl::UnmountDisk(::google::protobuf::RpcController* controll
     brpc::ClosureGuard guard(done);
     auto* status = response->mutable_status();
     if (!disk_manager_) {
-        FillStatus(status, EINVAL, "disk manager is null");
+        StatusUtils::SetStatus(status, rpc::STATUS_INVALID_ARGUMENT, "disk manager is null");
         return;
     }
     if (!disk_manager_->Unmount()) {
-        FillStatus(status, EIO, "failed to unmount disk");
+        StatusUtils::SetStatus(status, rpc::STATUS_IO_ERROR, "failed to unmount disk");
         return;
     }
     ready_ = false;
@@ -169,20 +170,4 @@ void StorageServiceImpl::UnmountDisk(::google::protobuf::RpcController* controll
 
 uint64_t StorageServiceImpl::ComputeChecksum(const void* data, size_t len) const {
     return butil::crc32c::Value(static_cast<const char*>(data), len);
-}
-
-void StorageServiceImpl::FillStatus(rpc::Status* status, int err, const std::string& message) const {
-    if (!status) {
-        return;
-    }
-    status->set_code(err);
-    if (err == 0) {
-        status->set_message("");
-        return;
-    }
-    if (!message.empty()) {
-        status->set_message(message);
-    } else {
-        status->set_message(std::strerror(err));
-    }
 }

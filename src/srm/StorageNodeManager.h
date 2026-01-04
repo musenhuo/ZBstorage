@@ -34,7 +34,6 @@ public:
 private:
     void HealthLoop();
     std::string GenerateNodeId();
-    void FillStatus(rpc::Status* status, int code, const std::string& msg);
 
     NodeRegistry registry_;
     std::atomic<uint64_t> id_seq_{1};

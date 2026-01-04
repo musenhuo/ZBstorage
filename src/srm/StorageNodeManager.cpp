@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "msg/RPC/proto/rpc_common.pb.h"
+#include "common/StatusUtils.h"
 
 StorageNodeManager::StorageNodeManager(std::chrono::milliseconds heartbeat_timeout,
                                        std::chrono::milliseconds health_check_interval)
@@ -41,7 +42,7 @@ void StorageNodeManager::HandleRegister(const storagenode::RegisterRequest* requ
         return;
     }
     if (request->ip().empty() || request->port() == 0) {
-        FillStatus(response->mutable_status(), rpc::STATUS_INVALID_ARGUMENT, "missing ip/port");
+        StatusUtils::SetStatus(response->mutable_status(), rpc::STATUS_INVALID_ARGUMENT, "missing ip/port");
         return;
     }
 
@@ -57,7 +58,7 @@ void StorageNodeManager::HandleRegister(const storagenode::RegisterRequest* requ
 
     registry_.Upsert(std::move(ctx));
     response->set_node_id(ctx.node_id);
-    FillStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
+    StatusUtils::SetStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
     std::cerr << "[SRM] node registered id=" << response->node_id() << " ip=" << request->ip()
               << ":" << request->port() << " disks=" << request->disks_size() << std::endl;
 }
@@ -68,18 +69,18 @@ void StorageNodeManager::HandleHeartbeat(const storagenode::HeartbeatRequest* re
         return;
     }
     if (request->node_id().empty()) {
-        FillStatus(response->mutable_status(), rpc::STATUS_INVALID_ARGUMENT, "empty node_id");
+        StatusUtils::SetStatus(response->mutable_status(), rpc::STATUS_INVALID_ARGUMENT, "empty node_id");
         response->set_require_rereg(true);
         return;
     }
     bool ok = registry_.UpdateHeartbeat(request->node_id(),
                                         std::chrono::steady_clock::now());
     if (!ok) {
-        FillStatus(response->mutable_status(), rpc::STATUS_NODE_NOT_FOUND, "node not registered");
+        StatusUtils::SetStatus(response->mutable_status(), rpc::STATUS_NODE_NOT_FOUND, "node not registered");
         response->set_require_rereg(true);
         return;
     }
-    FillStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
+    StatusUtils::SetStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
     response->set_require_rereg(false);
 }
 
@@ -104,22 +105,6 @@ std::string StorageNodeManager::GenerateNodeId() {
     auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     return "node-" + std::to_string(now) + "-" + std::to_string(seq);
-}
-
-void StorageNodeManager::FillStatus(rpc::Status* status, int code, const std::string& msg) {
-    if (!status) {
-        return;
-    }
-    status->set_code(code);
-    if (code == 0) {
-        status->set_message("");
-        return;
-    }
-    if (!msg.empty()) {
-        status->set_message(msg);
-    } else {
-        status->set_message(std::strerror(code));
-    }
 }
 
 bool StorageNodeManager::GetNode(const std::string& node_id, NodeContext& ctx) const {

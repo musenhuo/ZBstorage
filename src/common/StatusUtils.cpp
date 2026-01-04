@@ -3,9 +3,7 @@
 #include <cerrno>
 #include <cstring>
 
-namespace StatusUtils {
-
-rpc::StatusCode FromErrno(int err) {
+rpc::StatusCode StatusUtils::FromErrno(int err) {
     if (err == 0) return rpc::STATUS_SUCCESS;
     switch (err) {
         case EINVAL: return rpc::STATUS_INVALID_ARGUMENT;
@@ -24,14 +22,22 @@ rpc::StatusCode FromErrno(int err) {
     }
 }
 
-rpc::StatusCode NormalizeCode(int code) {
-    if (code >= rpc::STATUS_SUCCESS && code <= rpc::STATUS_VIRTUAL_NODE_ERROR) {
-        return static_cast<rpc::StatusCode>(code);
+rpc::StatusCode StatusUtils::NormalizeCode(int code) {
+    switch (code) {
+        case rpc::STATUS_SUCCESS:
+        case rpc::STATUS_UNKNOWN_ERROR:
+        case rpc::STATUS_INVALID_ARGUMENT:
+        case rpc::STATUS_NODE_NOT_FOUND:
+        case rpc::STATUS_IO_ERROR:
+        case rpc::STATUS_NETWORK_ERROR:
+        case rpc::STATUS_VIRTUAL_NODE_ERROR:
+            return static_cast<rpc::StatusCode>(code);
+        default:
+            return FromErrno(code);
     }
-    return FromErrno(code);
 }
 
-void SetStatus(rpc::Status* status, rpc::StatusCode code, const std::string& msg) {
+void StatusUtils::SetStatus(rpc::Status* status, rpc::StatusCode code, const std::string& msg) {
     if (!status) return;
     status->set_code(code);
     if (code == rpc::STATUS_SUCCESS) {
@@ -40,5 +46,3 @@ void SetStatus(rpc::Status* status, rpc::StatusCode code, const std::string& msg
         status->set_message(msg.empty() ? "error" : msg);
     }
 }
-
-} // namespace StatusUtils

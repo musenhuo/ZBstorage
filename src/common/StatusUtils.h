@@ -4,10 +4,15 @@
 
 #include "msg/RPC/proto/rpc_common.pb.h"
 
-namespace StatusUtils {
+// Helper to bridge system errno and proto StatusCode.
+class StatusUtils {
+public:
+    // Map a system errno (or negative return) to StatusCode.
+    static rpc::StatusCode FromErrno(int sys_errno);
 
-rpc::StatusCode FromErrno(int err);
-rpc::StatusCode NormalizeCode(int code);
-void SetStatus(rpc::Status* status, rpc::StatusCode code, const std::string& msg = "");
+    // Normalize a code coming from downstream (either StatusCode or errno).
+    static rpc::StatusCode NormalizeCode(int code);
 
-} // namespace StatusUtils
+    // Populate rpc::Status with code/message.
+    static void SetStatus(rpc::Status* status, rpc::StatusCode code, const std::string& msg = "");
+};

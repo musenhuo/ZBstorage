@@ -8,6 +8,8 @@
 #include <iostream>
 #include <utility>
 
+#include "msg/RPC/proto/rpc_common.pb.h"
+
 StorageNodeManager::StorageNodeManager(std::chrono::milliseconds heartbeat_timeout,
                                        std::chrono::milliseconds health_check_interval)
     : heartbeat_timeout_(heartbeat_timeout),
@@ -39,7 +41,7 @@ void StorageNodeManager::HandleRegister(const storagenode::RegisterRequest* requ
         return;
     }
     if (request->ip().empty() || request->port() == 0) {
-        FillStatus(response->mutable_status(), EINVAL, "missing ip/port");
+        FillStatus(response->mutable_status(), rpc::STATUS_INVALID_ARGUMENT, "missing ip/port");
         return;
     }
 
@@ -55,8 +57,8 @@ void StorageNodeManager::HandleRegister(const storagenode::RegisterRequest* requ
 
     registry_.Upsert(std::move(ctx));
     response->set_node_id(ctx.node_id);
-    FillStatus(response->mutable_status(), 0, "");
-    std::cerr << "[SRM] node registered id=" << ctx.node_id << " ip=" << request->ip()
+    FillStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
+    std::cerr << "[SRM] node registered id=" << response->node_id() << " ip=" << request->ip()
               << ":" << request->port() << " disks=" << request->disks_size() << std::endl;
 }
 
@@ -66,18 +68,18 @@ void StorageNodeManager::HandleHeartbeat(const storagenode::HeartbeatRequest* re
         return;
     }
     if (request->node_id().empty()) {
-        FillStatus(response->mutable_status(), EINVAL, "empty node_id");
+        FillStatus(response->mutable_status(), rpc::STATUS_INVALID_ARGUMENT, "empty node_id");
         response->set_require_rereg(true);
         return;
     }
     bool ok = registry_.UpdateHeartbeat(request->node_id(),
                                         std::chrono::steady_clock::now());
     if (!ok) {
-        FillStatus(response->mutable_status(), ENOENT, "node not registered");
+        FillStatus(response->mutable_status(), rpc::STATUS_NODE_NOT_FOUND, "node not registered");
         response->set_require_rereg(true);
         return;
     }
-    FillStatus(response->mutable_status(), 0, "");
+    FillStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
     response->set_require_rereg(false);
 }
 

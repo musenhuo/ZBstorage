@@ -1,10 +1,16 @@
 #include "GatewayServiceImpl.h"
+#include "common/StatusUtils.h"
 
 void GatewayServiceImpl::Write(::google::protobuf::RpcController* controller,
                                const storagenode::WriteRequest* request,
                                storagenode::WriteReply* response,
                                ::google::protobuf::Closure* done) {
     if (!dispatcher_) {
+        if (response) {
+            StatusUtils::SetStatus(response->mutable_status(),
+                                   rpc::STATUS_UNKNOWN_ERROR,
+                                   "Gateway dispatcher not initialized");
+        }
         if (done) done->Run();
         return;
     }
@@ -16,6 +22,11 @@ void GatewayServiceImpl::Read(::google::protobuf::RpcController* controller,
                               storagenode::ReadReply* response,
                               ::google::protobuf::Closure* done) {
     if (!dispatcher_) {
+        if (response) {
+            StatusUtils::SetStatus(response->mutable_status(),
+                                   rpc::STATUS_UNKNOWN_ERROR,
+                                   "Gateway dispatcher not initialized");
+        }
         if (done) done->Run();
         return;
     }

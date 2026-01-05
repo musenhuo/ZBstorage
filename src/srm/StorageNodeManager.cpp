@@ -8,7 +8,7 @@
 #include <iostream>
 #include <utility>
 
-#include "msg/RPC/proto/rpc_common.pb.h"
+#include "rpc_common.pb.h"
 #include "common/StatusUtils.h"
 
 StorageNodeManager::StorageNodeManager(std::chrono::milliseconds heartbeat_timeout,

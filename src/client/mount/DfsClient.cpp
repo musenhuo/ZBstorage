@@ -4,8 +4,8 @@
 #include <cstring>
 #include <unistd.h>
 
-#include "msg/RPC/proto/mds.pb.h"
-#include "msg/RPC/proto/vfs.pb.h"
+#include "mds.pb.h"
+#include "vfs.pb.h"
 #include "storage_node.pb.h"
 #include "mds/inode/inode.h"
 

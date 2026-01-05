@@ -46,18 +46,27 @@ endif()
 target_include_directories(real_node_server
   PRIVATE
     ${CMAKE_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/msg/RPC
+    ${CMAKE_BINARY_DIR}/msg
+    ${CMAKE_BINARY_DIR}/msg/proto
     ${BRPC_INCLUDE_DIRS}
 )
 
 target_include_directories(real_node_client
   PRIVATE
     ${CMAKE_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/msg/RPC
+    ${CMAKE_BINARY_DIR}/msg
+    ${CMAKE_BINARY_DIR}/msg/proto
     ${BRPC_INCLUDE_DIRS}
 )
 
 target_include_directories(real_node_stress_client
   PRIVATE
     ${CMAKE_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/msg/RPC
+    ${CMAKE_BINARY_DIR}/msg
+    ${CMAKE_BINARY_DIR}/msg/proto
     ${BRPC_INCLUDE_DIRS}
 )
 

@@ -45,6 +45,9 @@ target_include_directories(srm_main
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_BINARY_DIR}/msg/RPC
+    ${CMAKE_BINARY_DIR}/msg
+    ${CMAKE_BINARY_DIR}/msg/proto
     ${BRPC_INCLUDE_DIRS}
 )
 

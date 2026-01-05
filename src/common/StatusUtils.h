@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "msg/RPC/proto/rpc_common.pb.h"
+#include "rpc_common.pb.h"
 
 // Helper to bridge system errno and proto StatusCode.
 class StatusUtils {

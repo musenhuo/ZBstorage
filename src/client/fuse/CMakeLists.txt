@@ -16,6 +16,7 @@ include_directories(
   ${CMAKE_BINARY_DIR}/msg/RPC
   ${CMAKE_BINARY_DIR}/msg/RPC/proto
   ${CMAKE_BINARY_DIR}/msg
+  ${CMAKE_BINARY_DIR}/msg/proto
 )
 
 # New mount client

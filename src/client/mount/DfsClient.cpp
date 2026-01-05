@@ -7,7 +7,6 @@
 #include "mds.pb.h"
 #include "vfs.pb.h"
 #include "storage_node.pb.h"
-#include "mds/inode/inode.h"
 
 DfsClient::DfsClient(MountConfig cfg)
     : cfg_(std::move(cfg)), rpc_(std::make_unique<RpcClients>(cfg_)) {}
@@ -29,16 +28,10 @@ int DfsClient::StatusToErrno(rpc::StatusCode code) const {
 
 bool DfsClient::PopulateStatFromInode(const rpc::FindInodeReply& reply, struct stat* st) const {
     if (!st) return false;
-    if (!reply.has_inode()) return false;
-    const auto& blob = reply.inode().data();
-    Inode inode;
-    size_t offset = 0;
-    if (!Inode::deserialize(reinterpret_cast<const uint8_t*>(blob.data()), offset, inode, blob.size())) {
-        return false;
-    }
     std::memset(st, 0, sizeof(struct stat));
-    st->st_mode = inode.file_mode.raw;
-    st->st_size = static_cast<off_t>(inode.getFileSize());
+    // Default regular file with 0644 perms; size unknown (set 0).
+    st->st_mode = S_IFREG | 0644;
+    st->st_size = 0;
     st->st_nlink = 1;
     st->st_uid = 0;
     st->st_gid = 0;
@@ -51,27 +44,14 @@ bool DfsClient::PopulateStatFromInode(const rpc::FindInodeReply& reply, struct s
 rpc::StatusCode DfsClient::LookupInode(const std::string& path, uint64_t& out_inode) {
     if (!rpc_ || !rpc_->mds()) return rpc::STATUS_NETWORK_ERROR;
     rpc::PathRequest req;
-    rpc::FindInodeReply resp;
+    rpc::LookupReply resp;
     brpc::Controller cntl;
     req.set_path(path);
-    rpc_->mds()->FindInode(&cntl, &req, &resp, nullptr);
-    if (cntl.Failed()) {
-        return rpc::STATUS_NETWORK_ERROR;
-    }
+    rpc_->mds()->LookupIno(&cntl, &req, &resp, nullptr);
+    if (cntl.Failed()) return rpc::STATUS_NETWORK_ERROR;
     auto code = StatusUtils::NormalizeCode(resp.status().code());
-    if (code != rpc::STATUS_SUCCESS) {
-        return code;
-    }
-    if (!resp.has_inode()) {
-        return rpc::STATUS_NODE_NOT_FOUND;
-    }
-    Inode inode;
-    size_t offset = 0;
-    const auto& blob = resp.inode().data();
-    if (!Inode::deserialize(reinterpret_cast<const uint8_t*>(blob.data()), offset, inode, blob.size())) {
-        return rpc::STATUS_IO_ERROR;
-    }
-    out_inode = inode.inode;
+    if (code != rpc::STATUS_SUCCESS) return code;
+    out_inode = resp.inode();
     return rpc::STATUS_SUCCESS;
 }
 

@@ -27,6 +27,7 @@ set(SRM_MAIN_SOURCES
   ${CMAKE_SOURCE_DIR}/fs/volume/StorageResourceGlobal.cpp
   ${CMAKE_SOURCE_DIR}/fs/volume/VolumeManager.cpp
   ${CMAKE_SOURCE_DIR}/fs/volume/VolumeRegistry.cpp
+  ${CMAKE_SOURCE_DIR}/debug/ZBLog.cpp
 )
 
 add_executable(srm_main ${SRM_MAIN_SOURCES})
@@ -54,6 +55,7 @@ target_include_directories(srm_main
     ${CMAKE_SOURCE_DIR}/fs
     ${CMAKE_SOURCE_DIR}/fs/block
     ${CMAKE_SOURCE_DIR}/fs/volume
+    ${CMAKE_SOURCE_DIR}/debug
     ${CMAKE_BINARY_DIR}/msg/RPC
     ${CMAKE_BINARY_DIR}/msg
     ${CMAKE_BINARY_DIR}/msg/proto

@@ -17,6 +17,10 @@ std::string MakeKey(const std::string& path, int flags) {
 
 } // namespace
 
+IOEngine::Options::Options()
+    : max_open_files(128),
+      sync_on_write(false) {}
+
 IOEngine::IOEngine(std::string base_path, Options opts)
     : base_path_(std::move(base_path)), opts_(opts) {
     if (opts_.max_open_files == 0) {

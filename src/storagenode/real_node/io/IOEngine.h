@@ -15,11 +15,12 @@ public:
     };
 
     struct Options {
-        size_t max_open_files{128};
-        bool sync_on_write{false};
+        Options();
+        size_t max_open_files;
+        bool sync_on_write;
     };
 
-    IOEngine(std::string base_path, Options opts = Options{});
+    IOEngine(std::string base_path, Options opts = Options());
     ~IOEngine();
 
     Result Write(const std::string& path, const void* data, size_t size, uint64_t offset, int flags, int mode);

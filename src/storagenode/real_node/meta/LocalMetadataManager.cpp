@@ -1,9 +1,12 @@
 #include "LocalMetadataManager.h"
 
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <sstream>
+#include <shared_mutex>
 
 namespace fs = std::filesystem;
 

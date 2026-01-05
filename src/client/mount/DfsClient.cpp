@@ -6,6 +6,7 @@
 
 #include "msg/RPC/proto/mds.pb.h"
 #include "msg/RPC/proto/vfs.pb.h"
+#include "storage_node.pb.h"
 #include "mds/inode/inode.h"
 
 DfsClient::DfsClient(MountConfig cfg)
@@ -47,23 +48,46 @@ bool DfsClient::PopulateStatFromInode(const rpc::FindInodeReply& reply, struct s
     return true;
 }
 
-int DfsClient::GetAttr(const std::string& path, struct stat* st) {
-    if (!rpc_ || !rpc_->mds()) return -ECOMM;
+rpc::StatusCode DfsClient::LookupInode(const std::string& path, uint64_t& out_inode) {
+    if (!rpc_ || !rpc_->mds()) return rpc::STATUS_NETWORK_ERROR;
     rpc::PathRequest req;
     rpc::FindInodeReply resp;
     brpc::Controller cntl;
     req.set_path(path);
     rpc_->mds()->FindInode(&cntl, &req, &resp, nullptr);
     if (cntl.Failed()) {
-        return -ECOMM;
+        return rpc::STATUS_NETWORK_ERROR;
     }
     auto code = StatusUtils::NormalizeCode(resp.status().code());
     if (code != rpc::STATUS_SUCCESS) {
-        return -StatusToErrno(code);
+        return code;
     }
-    if (!PopulateStatFromInode(resp, st)) {
-        return -EIO;
+    if (!resp.has_inode()) {
+        return rpc::STATUS_NODE_NOT_FOUND;
     }
+    Inode inode;
+    size_t offset = 0;
+    const auto& blob = resp.inode().data();
+    if (!Inode::deserialize(reinterpret_cast<const uint8_t*>(blob.data()), offset, inode, blob.size())) {
+        return rpc::STATUS_IO_ERROR;
+    }
+    out_inode = inode.inode;
+    return rpc::STATUS_SUCCESS;
+}
+
+int DfsClient::GetAttr(const std::string& path, struct stat* st) {
+    if (!rpc_ || !rpc_->mds()) return -ECOMM;
+    uint64_t ino = 0;
+    auto code = LookupInode(path, ino);
+    if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
+
+    rpc::PathRequest req;
+    rpc::FindInodeReply resp;
+    brpc::Controller cntl;
+    req.set_path(path);
+    rpc_->mds()->FindInode(&cntl, &req, &resp, nullptr);
+    if (cntl.Failed()) return -ECOMM;
+    if (!PopulateStatFromInode(resp, st)) return -EIO;
     return 0;
 }
 
@@ -87,23 +111,17 @@ int DfsClient::ReadDir(const std::string& path, void* buf, fuse_fill_dir_t fille
 }
 
 int DfsClient::Open(const std::string& path, int flags, int& out_fd) {
-    if (!rpc_ || !rpc_->vfs()) return -ECOMM;
-    rpc::OpenRequest req;
-    rpc::IOReplyFD resp;
-    brpc::Controller cntl;
-    req.set_path(path);
-    req.set_flags(flags);
-    req.set_mode(0644);
-    rpc_->vfs()->Open(&cntl, &req, &resp, nullptr);
-    if (cntl.Failed()) return -ECOMM;
-    auto code = StatusUtils::NormalizeCode(resp.status().code());
+    uint64_t ino = 0;
+    auto code = LookupInode(path, ino);
     if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
-    out_fd = static_cast<int>(resp.bytes());
+    int fd = next_fd_++;
+    fd_to_inode_[fd] = ino;
+    out_fd = fd;
     return 0;
 }
 
 int DfsClient::Create(const std::string& path, int flags, mode_t mode, int& out_fd) {
-    if (!rpc_ || !rpc_->mds() || !rpc_->vfs()) return -ECOMM;
+    if (!rpc_ || !rpc_->mds()) return -ECOMM;
     rpc::PathModeRequest creq;
     rpc::Status cresp;
     brpc::Controller ccntl;
@@ -117,29 +135,22 @@ int DfsClient::Create(const std::string& path, int flags, mode_t mode, int& out_
 }
 
 int DfsClient::Read(int fd, char* buf, size_t size, off_t offset, ssize_t& out_bytes) {
-    if (!rpc_ || !rpc_->vfs()) return -ECOMM;
-    // Seek to desired offset
-    rpc::SeekRequest seek_req;
-    rpc::SeekReply seek_resp;
-    brpc::Controller seek_cntl;
-    seek_req.set_fd(fd);
-    seek_req.set_offset(offset);
-    seek_req.set_whence(SEEK_SET);
-    rpc_->vfs()->Seek(&seek_cntl, &seek_req, &seek_resp, nullptr);
-    if (seek_cntl.Failed()) return -ECOMM;
-    auto seek_code = StatusUtils::NormalizeCode(seek_resp.status().code());
-    if (seek_code != rpc::STATUS_SUCCESS) return -StatusToErrno(seek_code);
+    if (!rpc_ || !rpc_->srm()) return -ECOMM;
+    auto it = fd_to_inode_.find(fd);
+    if (it == fd_to_inode_.end()) return -EBADF;
 
-    rpc::IORequestFD req;
-    rpc::IOReplyFD resp;
+    storagenode::ReadRequest req;
+    storagenode::ReadReply resp;
     brpc::Controller cntl;
-    req.set_fd(fd);
-    req.set_data(std::string(size, '\0')); // length hint
-    rpc_->vfs()->Read(&cntl, &req, &resp, nullptr);
+    req.set_node_id(cfg_.default_node_id);
+    req.set_chunk_id(static_cast<uint64_t>(it->second));
+    req.set_offset(static_cast<uint64_t>(offset));
+    req.set_length(static_cast<uint64_t>(size));
+    rpc_->srm()->Read(&cntl, &req, &resp, nullptr);
     if (cntl.Failed()) return -ECOMM;
     auto code = StatusUtils::NormalizeCode(resp.status().code());
     if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
-    out_bytes = resp.bytes();
+    out_bytes = static_cast<ssize_t>(resp.bytes_read());
     if (out_bytes > 0 && static_cast<size_t>(out_bytes) <= size) {
         std::memcpy(buf, resp.data().data(), static_cast<size_t>(out_bytes));
     }
@@ -147,41 +158,33 @@ int DfsClient::Read(int fd, char* buf, size_t size, off_t offset, ssize_t& out_b
 }
 
 int DfsClient::Write(int fd, const char* buf, size_t size, off_t offset, ssize_t& out_bytes) {
-    if (!rpc_ || !rpc_->vfs()) return -ECOMM;
-    // Seek to desired offset
-    rpc::SeekRequest seek_req;
-    rpc::SeekReply seek_resp;
-    brpc::Controller seek_cntl;
-    seek_req.set_fd(fd);
-    seek_req.set_offset(offset);
-    seek_req.set_whence(SEEK_SET);
-    rpc_->vfs()->Seek(&seek_cntl, &seek_req, &seek_resp, nullptr);
-    if (seek_cntl.Failed()) return -ECOMM;
-    auto seek_code = StatusUtils::NormalizeCode(seek_resp.status().code());
-    if (seek_code != rpc::STATUS_SUCCESS) return -StatusToErrno(seek_code);
+    if (!rpc_ || !rpc_->srm()) return -ECOMM;
+    auto it = fd_to_inode_.find(fd);
+    if (it == fd_to_inode_.end()) return -EBADF;
 
-    rpc::IORequestFD req;
-    rpc::IOReplyFD resp;
+    storagenode::WriteRequest req;
+    storagenode::WriteReply resp;
     brpc::Controller cntl;
-    req.set_fd(fd);
+    req.set_node_id(cfg_.default_node_id);
+    req.set_chunk_id(static_cast<uint64_t>(it->second));
+    req.set_offset(static_cast<uint64_t>(offset));
     req.set_data(buf, size);
-    rpc_->vfs()->Write(&cntl, &req, &resp, nullptr);
+    req.set_checksum(0);
+    req.set_flags(0);
+    req.set_mode(0644);
+
+    rpc_->srm()->Write(&cntl, &req, &resp, nullptr);
     if (cntl.Failed()) return -ECOMM;
     auto code = StatusUtils::NormalizeCode(resp.status().code());
     if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
-    out_bytes = resp.bytes();
+    out_bytes = static_cast<ssize_t>(resp.bytes_written());
     return 0;
 }
 
 int DfsClient::Close(int fd) {
-    if (!rpc_ || !rpc_->vfs()) return -ECOMM;
-    rpc::FdRequest req;
-    rpc::Status resp;
-    brpc::Controller cntl;
-    req.set_fd(fd);
-    rpc_->vfs()->Close(&cntl, &req, &resp, nullptr);
-    if (cntl.Failed()) return -ECOMM;
-    auto code = StatusUtils::NormalizeCode(resp.code());
-    if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
+    auto it = fd_to_inode_.find(fd);
+    if (it != fd_to_inode_.end()) {
+        fd_to_inode_.erase(it);
+    }
     return 0;
 }

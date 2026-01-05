@@ -14,10 +14,18 @@ bool RpcClients::Init() {
     vfs_channel_ = std::make_unique<brpc::Channel>();
     if (vfs_channel_->Init(cfg_.vfs_addr.c_str(), &opts) != 0) {
         vfs_channel_.reset();
+        // legacy; still continue
+    }
+    srm_channel_ = std::make_unique<brpc::Channel>();
+    if (srm_channel_->Init(cfg_.srm_addr.c_str(), &opts) != 0) {
+        srm_channel_.reset();
         return false;
     }
 
     mds_stub_ = std::make_unique<rpc::MdsService_Stub>(mds_channel_.get());
-    vfs_stub_ = std::make_unique<rpc::VfsService_Stub>(vfs_channel_.get());
+    if (vfs_channel_) {
+        vfs_stub_ = std::make_unique<rpc::VfsService_Stub>(vfs_channel_.get());
+    }
+    srm_stub_ = std::make_unique<storagenode::StorageService_Stub>(srm_channel_.get());
     return true;
 }

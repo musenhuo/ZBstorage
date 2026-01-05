@@ -13,6 +13,8 @@
 
 DEFINE_string(mds_addr, "127.0.0.1:9000", "MDS service address");
 DEFINE_string(vfs_addr, "127.0.0.1:9001", "VFS service address");
+DEFINE_string(srm_addr, "127.0.0.1:9100", "SRM Gateway service address");
+DEFINE_string(node_id, "node-1", "Default node id to target on SRM/Real Node");
 DEFINE_string(mount_point, "/mnt/zbstorage", "Mount point");
 
 namespace {
@@ -98,7 +100,9 @@ int main(int argc, char* argv[]) {
     MountConfig cfg;
     cfg.mds_addr = FLAGS_mds_addr;
     cfg.vfs_addr = FLAGS_vfs_addr;
+    cfg.srm_addr = FLAGS_srm_addr;
     cfg.mount_point = FLAGS_mount_point;
+    cfg.default_node_id = FLAGS_node_id;
     g_client = std::make_shared<DfsClient>(cfg);
     if (!g_client->Init()) {
         std::fprintf(stderr, "Failed to initialize DFS client (mds=%s vfs=%s)\n",
@@ -108,8 +112,9 @@ int main(int argc, char* argv[]) {
 
     struct fuse_operations ops = BuildFuseOps();
 
-    std::printf("Mounting ZBStorage at %s (MDS=%s, VFS=%s)\n",
-                cfg.mount_point.c_str(), cfg.mds_addr.c_str(), cfg.vfs_addr.c_str());
+    std::printf("Mounting ZBStorage at %s (MDS=%s, SRM=%s, node_id=%s)\n",
+                cfg.mount_point.c_str(), cfg.mds_addr.c_str(), cfg.srm_addr.c_str(),
+                cfg.default_node_id.c_str());
 
     char* fuse_argv[2];
     fuse_argv[0] = argv[0];

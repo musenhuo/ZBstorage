@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <vector>
 #include <fuse.h>
+#include <unordered_map>
 
 #include "RpcClients.h"
 #include "common/StatusUtils.h"
@@ -26,7 +27,10 @@ public:
 private:
     int StatusToErrno(rpc::StatusCode code) const;
     bool PopulateStatFromInode(const rpc::FindInodeReply& reply, struct stat* st) const;
+    rpc::StatusCode LookupInode(const std::string& path, uint64_t& out_inode);
 
     MountConfig cfg_;
     std::unique_ptr<RpcClients> rpc_;
+    int next_fd_{3};
+    std::unordered_map<int, uint64_t> fd_to_inode_;
 };

@@ -27,6 +27,7 @@ target_compile_definitions(zb_fuse_client PRIVATE _FILE_OFFSET_BITS=64)
 target_link_libraries(zb_fuse_client
   PRIVATE
     rpc_proto
+    storagenode_proto
     ${Protobuf_LIBRARIES}
     ${BRPC_LIBRARIES}
     ${GFLAGS_LIBRARIES}

@@ -28,7 +28,11 @@ set(PROTO_FILES
 set(PROTOBUF_IMPORT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
 
-set(REPO_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+set(REPO_ROOT ${CMAKE_SOURCE_DIR})
+# If configured from the repo root's src/ directory, adjust to parent.
+if(NOT EXISTS ${REPO_ROOT}/storagenode/optical/OpticalDiscLibrary.cpp)
+  get_filename_component(REPO_ROOT ${CMAKE_SOURCE_DIR}/.. ABSOLUTE)
+endif()
 
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -47,31 +51,31 @@ include_directories(
 )
 
 set(COMMON_SRCS
-  ${REPO_ROOT}/src/storagenode/optical/OpticalDiscLibrary.cpp
-  ${REPO_ROOT}/src/storagenode/optical/OpticalDisc.cpp
-  ${REPO_ROOT}/src/storagenode/StoreageNode.cpp
-  ${REPO_ROOT}/src/storagenode/hard_disc/SSD.cpp
-  ${REPO_ROOT}/src/storagenode/hard_disc/HDD.cpp
-  ${REPO_ROOT}/src/fs/block/BlockManager.cpp
-  ${REPO_ROOT}/src/fs/volume/Volume.cpp
-  ${REPO_ROOT}/src/fs/volume/StorageResourceGlobal.cpp
-  ${REPO_ROOT}/src/fs/volume/VolumeManager.cpp
-  ${REPO_ROOT}/src/fs/volume/VolumeRegistry.cpp
-  ${REPO_ROOT}/src/fs/VFS/VFS_new.cpp
-  ${REPO_ROOT}/src/fs/io/LocalStorageGateway.cpp
-  ${REPO_ROOT}/src/srm/storage_manager/StorageResource.cpp
-  ${REPO_ROOT}/src/mds/server/Server.cpp
-  ${REPO_ROOT}/src/mds/server/DirectoryLockTable.cpp
-  ${REPO_ROOT}/src/mds/server/DirStore.cpp
-  ${REPO_ROOT}/src/mds/allocator/VolumeAllocator.cpp
-  ${REPO_ROOT}/src/mds/metadataserver/MetadataManager.cpp
-  ${REPO_ROOT}/src/mds/metadataserver/KVStore.cpp
-  ${REPO_ROOT}/src/mds/collector/collector.cpp
-  ${REPO_ROOT}/src/srm/image_manager/ImageManager.cpp
-  ${REPO_ROOT}/src/mds/inode/inode.cpp
-  ${REPO_ROOT}/src/mds/inode/InodeStorage.cpp
-  ${REPO_ROOT}/src/mds/inode/InodeTimestamp.cpp
-  ${REPO_ROOT}/src/debug/ZBLog.cpp
+  ${REPO_ROOT}/storagenode/optical/OpticalDiscLibrary.cpp
+  ${REPO_ROOT}/storagenode/optical/OpticalDisc.cpp
+  ${REPO_ROOT}/storagenode/StoreageNode.cpp
+  ${REPO_ROOT}/storagenode/hard_disc/SSD.cpp
+  ${REPO_ROOT}/storagenode/hard_disc/HDD.cpp
+  ${REPO_ROOT}/fs/block/BlockManager.cpp
+  ${REPO_ROOT}/fs/volume/Volume.cpp
+  ${REPO_ROOT}/fs/volume/StorageResourceGlobal.cpp
+  ${REPO_ROOT}/fs/volume/VolumeManager.cpp
+  ${REPO_ROOT}/fs/volume/VolumeRegistry.cpp
+  ${REPO_ROOT}/fs/VFS/VFS_new.cpp
+  ${REPO_ROOT}/fs/io/LocalStorageGateway.cpp
+  ${REPO_ROOT}/srm/storage_manager/StorageResource.cpp
+  ${REPO_ROOT}/mds/server/Server.cpp
+  ${REPO_ROOT}/mds/server/DirectoryLockTable.cpp
+  ${REPO_ROOT}/mds/server/DirStore.cpp
+  ${REPO_ROOT}/mds/allocator/VolumeAllocator.cpp
+  ${REPO_ROOT}/mds/metadataserver/MetadataManager.cpp
+  ${REPO_ROOT}/mds/metadataserver/KVStore.cpp
+  ${REPO_ROOT}/mds/collector/collector.cpp
+  ${REPO_ROOT}/srm/image_manager/ImageManager.cpp
+  ${REPO_ROOT}/mds/inode/inode.cpp
+  ${REPO_ROOT}/mds/inode/InodeStorage.cpp
+  ${REPO_ROOT}/mds/inode/InodeTimestamp.cpp
+  ${REPO_ROOT}/debug/ZBLog.cpp
 )
 
 add_library(rpc_proto ${PROTO_SRCS} ${PROTO_HDRS})

@@ -9,9 +9,9 @@ pkg_check_modules(BRPC REQUIRED brpc)
 
 include_directories(
   ${FUSE_INCLUDE_DIRS}
-  ${CMAKE_SOURCE_DIR}/src
-  ${CMAKE_SOURCE_DIR}/src/common
-  ${CMAKE_SOURCE_DIR}/src/client
+  ${CMAKE_SOURCE_DIR}
+  ${CMAKE_SOURCE_DIR}/common
+  ${CMAKE_SOURCE_DIR}/client
   ${CMAKE_BINARY_DIR}/src/msg/RPC
   ${CMAKE_BINARY_DIR}/src/msg
 )
@@ -21,7 +21,7 @@ add_executable(zb_fuse_client
   zb_fuse_main.cpp
   ../mount/DfsClient.cpp
   ../mount/RpcClients.cpp
-  ${CMAKE_SOURCE_DIR}/src/common/StatusUtils.cpp
+  ${CMAKE_SOURCE_DIR}/common/StatusUtils.cpp
 )
 target_compile_definitions(zb_fuse_client PRIVATE _FILE_OFFSET_BITS=64)
 target_link_libraries(zb_fuse_client

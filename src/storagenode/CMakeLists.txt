@@ -25,13 +25,13 @@ add_library(zb_storagenode STATIC
 
 target_include_directories(zb_storagenode
   PUBLIC
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/storagenode
-    ${CMAKE_SOURCE_DIR}/src/storagenode/hard_disc
-    ${CMAKE_SOURCE_DIR}/src/storagenode/optical
-    ${CMAKE_SOURCE_DIR}/src/fs
-    ${CMAKE_SOURCE_DIR}/src/fs/block
-    ${CMAKE_SOURCE_DIR}/src/fs/volume
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/storagenode
+    ${CMAKE_SOURCE_DIR}/storagenode/hard_disc
+    ${CMAKE_SOURCE_DIR}/storagenode/optical
+    ${CMAKE_SOURCE_DIR}/fs
+    ${CMAKE_SOURCE_DIR}/fs/block
+    ${CMAKE_SOURCE_DIR}/fs/volume
 )
 
 target_link_libraries(zb_storagenode

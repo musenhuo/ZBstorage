@@ -7,7 +7,7 @@ pkg_check_modules(BRPC REQUIRED brpc)
 
 # Ensure proto target is available (expected from top-level add_subdirectory).
 if(NOT TARGET storagenode_proto)
-  add_subdirectory(${CMAKE_SOURCE_DIR}/src/msg/proto ${CMAKE_BINARY_DIR}/src/msg/proto_build)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/msg/proto ${CMAKE_BINARY_DIR}/src/msg/proto_build)
 endif()
 
 add_executable(real_node_server
@@ -16,7 +16,7 @@ add_executable(real_node_server
   io/DiskManager.cpp
   io/IOEngine.cpp
   agent/NodeAgent.cpp
-  ${CMAKE_SOURCE_DIR}/src/common/StatusUtils.cpp
+  ${CMAKE_SOURCE_DIR}/common/StatusUtils.cpp
 )
 
 add_executable(real_node_client
@@ -45,19 +45,19 @@ endif()
 
 target_include_directories(real_node_server
   PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}
     ${BRPC_INCLUDE_DIRS}
 )
 
 target_include_directories(real_node_client
   PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}
     ${BRPC_INCLUDE_DIRS}
 )
 
 target_include_directories(real_node_stress_client
   PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}
     ${BRPC_INCLUDE_DIRS}
 )
 

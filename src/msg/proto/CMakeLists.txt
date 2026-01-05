@@ -8,14 +8,14 @@ set(PROTO_SRC
 )
 
 # Allow imports like "../RPC/proto/..." used inside the proto.
-set(PROTOBUF_IMPORT_DIRS ${CMAKE_SOURCE_DIR}/src/msg)
+set(PROTOBUF_IMPORT_DIRS ${CMAKE_SOURCE_DIR}/msg)
 protobuf_generate_cpp(STORAGENODE_PROTO_SRCS STORAGENODE_PROTO_HDRS ${PROTO_SRC})
 
 add_library(storagenode_proto ${STORAGENODE_PROTO_SRCS} ${STORAGENODE_PROTO_HDRS})
 target_include_directories(storagenode_proto
   PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_SOURCE_DIR}/src/msg
+    ${CMAKE_SOURCE_DIR}/msg
 )
 target_link_libraries(storagenode_proto
   PUBLIC

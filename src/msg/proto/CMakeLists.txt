@@ -7,8 +7,11 @@ set(PROTO_SRC
   ${CMAKE_CURRENT_SOURCE_DIR}/cluster_manager.proto
 )
 
-# Allow imports like "../RPC/proto/..." used inside the proto.
-set(PROTOBUF_IMPORT_DIRS ${CMAKE_SOURCE_DIR}/msg)
+# Allow imports like "RPC/proto/..." used inside the proto.
+set(PROTOBUF_IMPORT_DIRS
+  ${CMAKE_SOURCE_DIR}/msg
+  ${CMAKE_SOURCE_DIR}/msg/RPC/proto
+)
 protobuf_generate_cpp(STORAGENODE_PROTO_SRCS STORAGENODE_PROTO_HDRS ${PROTO_SRC})
 
 add_library(storagenode_proto ${STORAGENODE_PROTO_SRCS} ${STORAGENODE_PROTO_HDRS})

@@ -22,6 +22,11 @@ set(SRM_MAIN_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/gateway/RequestDispatcher.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/simulation/VirtualNodeEngine.cpp
   ${CMAKE_SOURCE_DIR}/common/StatusUtils.cpp
+  ${CMAKE_SOURCE_DIR}/fs/volume/Volume.cpp
+  ${CMAKE_SOURCE_DIR}/fs/block/BlockManager.cpp
+  ${CMAKE_SOURCE_DIR}/fs/volume/StorageResourceGlobal.cpp
+  ${CMAKE_SOURCE_DIR}/fs/volume/VolumeManager.cpp
+  ${CMAKE_SOURCE_DIR}/fs/volume/VolumeRegistry.cpp
 )
 
 add_executable(srm_main ${SRM_MAIN_SOURCES})
@@ -46,6 +51,9 @@ target_include_directories(srm_main
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/common
+    ${CMAKE_SOURCE_DIR}/fs
+    ${CMAKE_SOURCE_DIR}/fs/block
+    ${CMAKE_SOURCE_DIR}/fs/volume
     ${CMAKE_BINARY_DIR}/msg/RPC
     ${CMAKE_BINARY_DIR}/msg
     ${CMAKE_BINARY_DIR}/msg/proto
@@ -55,6 +63,7 @@ target_include_directories(srm_main
 target_link_libraries(srm_main
   PRIVATE
     storagenode_proto
+    rpc_proto
     ${_BRPC_LINK}
     ${_GFLAGS_LINK}
 )

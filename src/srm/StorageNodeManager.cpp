@@ -12,9 +12,11 @@
 #include "common/StatusUtils.h"
 
 StorageNodeManager::StorageNodeManager(std::chrono::milliseconds heartbeat_timeout,
-                                       std::chrono::milliseconds health_check_interval)
+                                       std::chrono::milliseconds health_check_interval,
+                                       std::string mds_addr)
     : heartbeat_timeout_(heartbeat_timeout),
-      health_check_interval_(health_check_interval) {}
+      health_check_interval_(health_check_interval),
+      mds_addr_(std::move(mds_addr)) {}
 
 StorageNodeManager::~StorageNodeManager() {
     Stop();
@@ -23,6 +25,20 @@ StorageNodeManager::~StorageNodeManager() {
 void StorageNodeManager::Start() {
     if (running_.exchange(true)) {
         return;
+    }
+    if (!mds_addr_.empty()) {
+        mds_channel_ = std::make_unique<brpc::Channel>();
+        brpc::ChannelOptions opts;
+        opts.protocol = "baidu_std";
+        opts.timeout_ms = 2000;
+        opts.max_retry = 1;
+        if (mds_channel_->Init(mds_addr_.c_str(), &opts) != 0) {
+            std::cerr << "[SRM] Failed to init MDS channel to " << mds_addr_ << std::endl;
+            mds_channel_.reset();
+        } else {
+            mds_stub_ = std::make_unique<rpc::MdsService_Stub>(mds_channel_.get());
+            std::cerr << "[SRM] Connected to MDS at " << mds_addr_ << std::endl;
+        }
     }
     health_thread_ = std::thread([this]() { HealthLoop(); });
 }
@@ -61,6 +77,10 @@ void StorageNodeManager::HandleRegister(const storagenode::RegisterRequest* requ
     StatusUtils::SetStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
     std::cerr << "[SRM] node registered id=" << response->node_id() << " ip=" << request->ip()
               << ":" << request->port() << " disks=" << request->disks_size() << std::endl;
+    NodeContext added;
+    if (registry_.Get(response->node_id(), added)) {
+        RegisterToMDS(added);
+    }
 }
 
 void StorageNodeManager::HandleHeartbeat(const storagenode::HeartbeatRequest* request,
@@ -111,12 +131,59 @@ bool StorageNodeManager::GetNode(const std::string& node_id, NodeContext& ctx) c
     return registry_.Get(node_id, ctx);
 }
 
-void StorageNodeManager::AddVirtualNode(const std::string& node_id, const SimulationParams& params) {
+void StorageNodeManager::AddVirtualNode(const std::string& node_id, const SimulationParams& params, uint64_t capacity_bytes) {
     NodeContext ctx;
     ctx.node_id = node_id;
     ctx.type = NodeType::Virtual;
     ctx.sim_params = params;
     ctx.state = NodeState::Online;
     ctx.last_heartbeat = std::chrono::steady_clock::now();
+    if (capacity_bytes > 0) {
+        storagenode::DiskInfo d;
+        d.set_mount_point("/virtual");
+        d.set_total_bytes(capacity_bytes);
+        d.set_free_bytes(capacity_bytes);
+        ctx.disks.push_back(d);
+    }
     registry_.Upsert(std::move(ctx));
+    NodeContext added;
+    if (registry_.Get(node_id, added)) {
+        RegisterToMDS(added);
+    }
+}
+
+void StorageNodeManager::RegisterToMDS(const NodeContext& ctx) {
+    if (!mds_stub_) {
+        return;
+    }
+    uint64_t capacity_bytes = 100ULL * 1024 * 1024 * 1024; // default 100GB
+    if (!ctx.disks.empty() && ctx.disks[0].total_bytes() > 0) {
+        capacity_bytes = ctx.disks[0].total_bytes();
+    }
+    uint64_t total_blocks = capacity_bytes / 4096;
+
+    auto vol = std::make_shared<Volume>();
+    vol->set_uuid(ctx.node_id);
+    vol->block_manager().set_total_blocks(total_blocks);
+
+    auto data = vol->serialize();
+
+    rpc::RegisterVolumeRequest req;
+    req.mutable_volume()->set_data(data.data(), data.size());
+    req.set_type(static_cast<uint32_t>(rpc::VolumeType::SSD));
+    req.set_persist_now(false);
+
+    rpc::RegisterVolumeReply resp;
+    brpc::Controller cntl;
+    mds_stub_->RegisterVolume(&cntl, &req, &resp, nullptr);
+    if (cntl.Failed()) {
+        std::cerr << "[SRM] RegisterVolume to MDS failed for node " << ctx.node_id
+                  << ": " << cntl.ErrorText() << std::endl;
+    } else if (resp.status().code() != 0) {
+        std::cerr << "[SRM] RegisterVolume rejected for node " << ctx.node_id
+                  << " code=" << resp.status().code() << " msg=" << resp.status().message() << std::endl;
+    } else {
+        std::cerr << "[SRM] Synced node " << ctx.node_id << " to MDS volume index "
+                  << resp.index() << std::endl;
+    }
 }

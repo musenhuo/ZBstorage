@@ -12,8 +12,10 @@ include_directories(
   ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/common
   ${CMAKE_SOURCE_DIR}/client
-  ${CMAKE_BINARY_DIR}/src/msg/RPC
-  ${CMAKE_BINARY_DIR}/src/msg
+  ${CMAKE_BINARY_DIR}
+  ${CMAKE_BINARY_DIR}/msg/RPC
+  ${CMAKE_BINARY_DIR}/msg/RPC/proto
+  ${CMAKE_BINARY_DIR}/msg
 )
 
 # New mount client

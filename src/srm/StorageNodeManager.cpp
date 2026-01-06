@@ -72,11 +72,12 @@ void StorageNodeManager::HandleRegister(const storagenode::RegisterRequest* requ
     ctx.state = NodeState::Online;
     ctx.last_heartbeat = std::chrono::steady_clock::now();
 
+    const std::string node_id = ctx.node_id;
     registry_.Upsert(std::move(ctx));
-    response->set_node_id(ctx.node_id);
+    response->set_node_id(node_id);
     StatusUtils::SetStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
     NodeContext added;
-    if (registry_.Get(response->node_id(), added)) {
+    if (registry_.Get(node_id, added)) {
         RegisterToMDS(added);
     }
 }

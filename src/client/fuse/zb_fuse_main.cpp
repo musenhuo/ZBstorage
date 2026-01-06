@@ -38,7 +38,13 @@ int fuse_readdir_cb(const char* path, void* buf, fuse_fill_dir_t filler,
 int fuse_open_cb(const char* path, struct fuse_file_info* fi) {
     if (!g_client) return -ECOMM;
     int fd = -1;
-    int rc = g_client->Open(path, fi->flags, fd);
+    int rc = 0;
+    // Fallback: some fuse versions call open with O_CREAT instead of create callback.
+    if ((fi->flags & O_CREAT) != 0) {
+        rc = g_client->Create(path, fi->flags, 0644, fd);
+    } else {
+        rc = g_client->Open(path, fi->flags, fd);
+    }
     if (rc == 0) {
         fi->fh = static_cast<uint64_t>(fd);
     }

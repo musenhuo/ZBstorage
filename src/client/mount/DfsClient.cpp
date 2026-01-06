@@ -53,7 +53,12 @@ rpc::StatusCode DfsClient::LookupInode(const std::string& path, InodeInfo& out_i
         return rpc::STATUS_NETWORK_ERROR;
     }
     auto code = StatusUtils::NormalizeCode(resp.status().code());
-    if (code != rpc::STATUS_SUCCESS) return code;
+    if (code != rpc::STATUS_SUCCESS) {
+        std::cerr << "[Client] FindInode failed path=" << path
+                  << " code=" << static_cast<int>(code)
+                  << " msg=" << resp.status().message() << std::endl;
+        return code;
+    }
     out_info.inode = 0;
     // For safety, also call LookupIno to get inode number.
     rpc::LookupReply lresp;
@@ -80,7 +85,11 @@ int DfsClient::GetAttr(const std::string& path, struct stat* st) {
     if (!rpc_ || !rpc_->mds()) return -ECOMM;
     InodeInfo info;
     auto code = LookupInode(path, info);
-    if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
+    if (code != rpc::STATUS_SUCCESS) {
+        std::cerr << "[Client] Open LookupInode failed path=" << path
+                  << " code=" << static_cast<int>(code) << std::endl;
+        return -StatusToErrno(code);
+    }
 
     rpc::PathRequest req;
     rpc::FindInodeReply resp;
@@ -143,7 +152,12 @@ int DfsClient::Create(const std::string& path, int flags, mode_t mode, int& out_
         return -ECOMM;
     }
     auto ccode = StatusUtils::NormalizeCode(cresp.code());
-    if (ccode != rpc::STATUS_SUCCESS) return -StatusToErrno(ccode);
+    if (ccode != rpc::STATUS_SUCCESS) {
+        std::cerr << "[Client] CreateFile failed path=" << path
+                  << " code=" << static_cast<int>(ccode)
+                  << " msg=" << cresp.message() << std::endl;
+        return -StatusToErrno(ccode);
+    }
     return Open(path, flags, out_fd);
 }
 
@@ -167,7 +181,12 @@ int DfsClient::Read(int fd, char* buf, size_t size, off_t offset, ssize_t& out_b
         return -ECOMM;
     }
     auto code = StatusUtils::NormalizeCode(resp.status().code());
-    if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
+    if (code != rpc::STATUS_SUCCESS) {
+        std::cerr << "[Client] Read failed fd=" << fd
+                  << " code=" << static_cast<int>(code)
+                  << " msg=" << resp.status().message() << std::endl;
+        return -StatusToErrno(code);
+    }
     out_bytes = static_cast<ssize_t>(resp.bytes_read());
     if (out_bytes > 0 && static_cast<size_t>(out_bytes) <= size) {
         std::memcpy(buf, resp.data().data(), static_cast<size_t>(out_bytes));
@@ -199,7 +218,12 @@ int DfsClient::Write(int fd, const char* buf, size_t size, off_t offset, ssize_t
         return -ECOMM;
     }
     auto code = StatusUtils::NormalizeCode(resp.status().code());
-    if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
+    if (code != rpc::STATUS_SUCCESS) {
+        std::cerr << "[Client] Write failed fd=" << fd
+                  << " code=" << static_cast<int>(code)
+                  << " msg=" << resp.status().message() << std::endl;
+        return -StatusToErrno(code);
+    }
     out_bytes = static_cast<ssize_t>(resp.bytes_written());
     return 0;
 }

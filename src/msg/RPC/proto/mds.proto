@@ -20,6 +20,11 @@ message TruncateRequest {
   string path = 1;
 }
 
+message UpdateFileSizeRequest {
+  uint64 inode = 1;
+  uint64 size_bytes = 2;
+}
+
 message LookupReply {
   Status status = 1;
   uint64 inode = 2;
@@ -111,6 +116,7 @@ service MdsService {
   rpc CreateFile(PathModeRequest) returns (Status);
   rpc RemoveFile(PathRequest) returns (RemoveFileReply);
   rpc TruncateFile(PathRequest) returns (Status);
+  rpc UpdateFileSize(UpdateFileSizeRequest) returns (Status);
   rpc Ls(PathRequest) returns (DirectoryListReply);
   rpc LookupIno(PathRequest) returns (LookupReply);
   rpc FindInode(PathRequest) returns (FindInodeReply);

@@ -1,6 +1,7 @@
 #include "DfsClient.h"
 
 #include <brpc/controller.h>
+#include <algorithm>
 #include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
@@ -81,6 +82,23 @@ rpc::StatusCode DfsClient::LookupInode(const std::string& path, InodeInfo& out_i
     return rpc::STATUS_SUCCESS;
 }
 
+rpc::StatusCode DfsClient::UpdateRemoteSize(uint64_t inode, uint64_t size_bytes) {
+    if (!rpc_ || !rpc_->mds()) return rpc::STATUS_NETWORK_ERROR;
+    rpc::UpdateFileSizeRequest req;
+    rpc::Status resp;
+    brpc::Controller cntl;
+    cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
+    req.set_inode(inode);
+    req.set_size_bytes(size_bytes);
+    rpc_->mds()->UpdateFileSize(&cntl, &req, &resp, nullptr);
+    if (cntl.Failed()) {
+        std::cerr << "[Client] UpdateFileSize RPC failed inode=" << inode
+                  << " err=" << cntl.ErrorText() << std::endl;
+        return rpc::STATUS_NETWORK_ERROR;
+    }
+    return StatusUtils::NormalizeCode(resp.code());
+}
+
 int DfsClient::GetAttr(const std::string& path, struct stat* st) {
     if (!rpc_ || !rpc_->mds()) return -ECOMM;
     InodeInfo info;
@@ -106,6 +124,13 @@ int DfsClient::GetAttr(const std::string& path, struct stat* st) {
         }
     }
     if (!PopulateStat(st, is_dir)) return -EIO;
+    if (!is_dir) {
+        std::lock_guard<std::mutex> lk(mu_);
+        auto it = inode_size_.find(info.inode);
+        if (it != inode_size_.end()) {
+            st->st_size = static_cast<off_t>(it->second);
+        }
+    }
     return 0;
 }
 
@@ -142,7 +167,13 @@ int DfsClient::Open(const std::string& path, int flags, int& out_fd) {
         return -StatusToErrno(code);
     }
     int fd = next_fd_++;
-    fd_info_[fd] = info;
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        fd_info_[fd] = info;
+        if (inode_size_.find(info.inode) == inode_size_.end()) {
+            inode_size_[info.inode] = 0;
+        }
+    }
     out_fd = fd;
     return 0;
 }
@@ -217,6 +248,8 @@ int DfsClient::Rmdir(const std::string& path) {
 
 int DfsClient::Unlink(const std::string& path) {
     if (!rpc_ || !rpc_->mds()) return -ECOMM;
+    InodeInfo info;
+    const bool had_inode = (LookupInode(path, info) == rpc::STATUS_SUCCESS);
     rpc::PathRequest req;
     rpc::RemoveFileReply resp;
     brpc::Controller cntl;
@@ -233,6 +266,10 @@ int DfsClient::Unlink(const std::string& path) {
                   << " code=" << static_cast<int>(code)
                   << " msg=" << resp.status().message() << std::endl;
         return -StatusToErrno(code);
+    }
+    if (had_inode) {
+        std::lock_guard<std::mutex> lk(mu_);
+        inode_size_.erase(info.inode);
     }
     return 0;
 }
@@ -256,23 +293,49 @@ int DfsClient::Truncate(const std::string& path) {
                   << " msg=" << resp.message() << std::endl;
         return -StatusToErrno(code);
     }
+    InodeInfo info;
+    if (LookupInode(path, info) == rpc::STATUS_SUCCESS) {
+        std::lock_guard<std::mutex> lk(mu_);
+        inode_size_[info.inode] = 0;
+    }
     return 0;
 }
 
 int DfsClient::Read(int fd, char* buf, size_t size, off_t offset, ssize_t& out_bytes) {
     if (!rpc_ || !rpc_->srm()) return -ECOMM;
-    auto it = fd_info_.find(fd);
-    if (it == fd_info_.end()) return -EBADF;
+    InodeInfo info;
+    uint64_t known_size = 0;
+    bool has_size = false;
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        auto it = fd_info_.find(fd);
+        if (it == fd_info_.end()) return -EBADF;
+        info = it->second;
+        auto sit = inode_size_.find(info.inode);
+        if (sit != inode_size_.end()) {
+            known_size = sit->second;
+            has_size = true;
+        }
+    }
+    if (has_size && offset >= static_cast<off_t>(known_size)) {
+        out_bytes = 0;
+        return 0;
+    }
+    size_t req_len = size;
+    if (has_size) {
+        uint64_t remain = known_size - static_cast<uint64_t>(offset);
+        req_len = static_cast<size_t>(std::min<uint64_t>(remain, size));
+    }
 
     storagenode::ReadRequest req;
     storagenode::ReadReply resp;
     brpc::Controller cntl;
     cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
-    const std::string& node_id = it->second.node_id.empty() ? cfg_.default_node_id : it->second.node_id;
+    const std::string& node_id = info.node_id.empty() ? cfg_.default_node_id : info.node_id;
     req.set_node_id(node_id);
-    req.set_chunk_id(static_cast<uint64_t>(it->second.inode));
+    req.set_chunk_id(static_cast<uint64_t>(info.inode));
     req.set_offset(static_cast<uint64_t>(offset));
-    req.set_length(static_cast<uint64_t>(size));
+    req.set_length(static_cast<uint64_t>(req_len));
     rpc_->srm()->Read(&cntl, &req, &resp, nullptr);
     if (cntl.Failed()) {
         std::cerr << "[Client] Read RPC failed: " << cntl.ErrorText() << std::endl;
@@ -294,16 +357,21 @@ int DfsClient::Read(int fd, char* buf, size_t size, off_t offset, ssize_t& out_b
 
 int DfsClient::Write(int fd, const char* buf, size_t size, off_t offset, ssize_t& out_bytes) {
     if (!rpc_ || !rpc_->srm()) return -ECOMM;
-    auto it = fd_info_.find(fd);
-    if (it == fd_info_.end()) return -EBADF;
+    InodeInfo info;
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        auto it = fd_info_.find(fd);
+        if (it == fd_info_.end()) return -EBADF;
+        info = it->second;
+    }
 
     storagenode::WriteRequest req;
     storagenode::WriteReply resp;
     brpc::Controller cntl;
     cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
-    const std::string& node_id = it->second.node_id.empty() ? cfg_.default_node_id : it->second.node_id;
+    const std::string& node_id = info.node_id.empty() ? cfg_.default_node_id : info.node_id;
     req.set_node_id(node_id);
-    req.set_chunk_id(static_cast<uint64_t>(it->second.inode));
+    req.set_chunk_id(static_cast<uint64_t>(info.inode));
     req.set_offset(static_cast<uint64_t>(offset));
     req.set_data(buf, size);
     req.set_checksum(0);
@@ -323,10 +391,31 @@ int DfsClient::Write(int fd, const char* buf, size_t size, off_t offset, ssize_t
         return -StatusToErrno(code);
     }
     out_bytes = static_cast<ssize_t>(resp.bytes_written());
+    uint64_t new_size = 0;
+    bool need_update = false;
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        uint64_t end = static_cast<uint64_t>(offset) + static_cast<uint64_t>(out_bytes);
+        auto& cur = inode_size_[info.inode];
+        if (end > cur) {
+            cur = end;
+            new_size = cur;
+            need_update = true;
+        }
+    }
+    if (need_update) {
+        auto code = UpdateRemoteSize(info.inode, new_size);
+        if (code != rpc::STATUS_SUCCESS) {
+            std::cerr << "[Client] UpdateFileSize failed inode=" << info.inode
+                      << " code=" << static_cast<int>(code) << std::endl;
+            return -StatusToErrno(code);
+        }
+    }
     return 0;
 }
 
 int DfsClient::Close(int fd) {
+    std::lock_guard<std::mutex> lk(mu_);
     auto it = fd_info_.find(fd);
     if (it != fd_info_.end()) {
         fd_info_.erase(it);

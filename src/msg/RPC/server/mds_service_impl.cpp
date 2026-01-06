@@ -186,6 +186,53 @@ public:
         LogRequest("TruncateFile", request->path(), response);
     }
 
+    void UpdateFileSize(::google::protobuf::RpcController*,
+                        const rpc::UpdateFileSizeRequest* request,
+                        rpc::Status* response,
+                        ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard guard(done);
+        if (!request || request->inode() == 0) {
+            StatusUtils::SetStatus(response, rpc::STATUS_INVALID_ARGUMENT, "missing inode");
+            LogRequest("UpdateFileSize", "<invalid>", response);
+            return;
+        }
+        Inode inode;
+        if (!mds_->ReadInode(request->inode(), inode)) {
+            StatusUtils::SetStatus(response, rpc::STATUS_NODE_NOT_FOUND, "inode not found");
+            LogRequest("UpdateFileSize", std::to_string(request->inode()), response);
+            return;
+        }
+        const uint64_t size_bytes = request->size_bytes();
+        uint16_t unit = 0;
+        uint16_t value = 0;
+        if (size_bytes <= 16383ULL) {
+            unit = 0;
+            value = static_cast<uint16_t>(size_bytes);
+        } else if (size_bytes <= 16383ULL * 1024ULL) {
+            unit = 1;
+            value = static_cast<uint16_t>((size_bytes + 1023ULL) / 1024ULL);
+        } else if (size_bytes <= 16383ULL * 1024ULL * 1024ULL) {
+            unit = 2;
+            value = static_cast<uint16_t>((size_bytes + 1024ULL * 1024ULL - 1) / (1024ULL * 1024ULL));
+        } else {
+            unit = 3;
+            uint64_t gb = 1024ULL * 1024ULL * 1024ULL;
+            uint64_t v = (size_bytes + gb - 1) / gb;
+            if (v > 16383ULL) v = 16383ULL;
+            value = static_cast<uint16_t>(v);
+        }
+        inode.setSizeUnit(unit);
+        inode.setFileSize(value);
+        inode.setFmTime(InodeTimestamp());
+        if (!mds_->WriteInode(request->inode(), inode)) {
+            StatusUtils::SetStatus(response, rpc::STATUS_IO_ERROR, "write inode failed");
+            LogRequest("UpdateFileSize", std::to_string(request->inode()), response);
+            return;
+        }
+        StatusUtils::SetStatus(response, rpc::STATUS_SUCCESS, "");
+        LogRequest("UpdateFileSize", std::to_string(request->inode()), response);
+    }
+
     void Ls(::google::protobuf::RpcController*,
             const rpc::PathRequest* request,
             rpc::DirectoryListReply* response,

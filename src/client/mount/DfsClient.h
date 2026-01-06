@@ -7,6 +7,7 @@
 #include <vector>
 #include <fuse.h>
 #include <unordered_map>
+#include <mutex>
 
 #include "RpcClients.h"
 #include "common/StatusUtils.h"
@@ -37,9 +38,12 @@ private:
     int StatusToErrno(rpc::StatusCode code) const;
     bool PopulateStat(struct stat* st, bool is_dir) const;
     rpc::StatusCode LookupInode(const std::string& path, InodeInfo& out_info);
+    rpc::StatusCode UpdateRemoteSize(uint64_t inode, uint64_t size_bytes);
 
     MountConfig cfg_;
     std::unique_ptr<RpcClients> rpc_;
     int next_fd_{3};
     std::unordered_map<int, InodeInfo> fd_info_;
+    std::unordered_map<uint64_t, uint64_t> inode_size_;
+    mutable std::mutex mu_;
 };

@@ -10,6 +10,7 @@
 #include "../io/IOEngine.h"
 #include "../meta/LocalMetadataManager.h"
 #include "../agent/NodeAgent.h"
+#include "common/LogRedirect.h"
 
 DEFINE_int32(port, 9010, "Port for storage real node server");
 DEFINE_string(device_path, "", "Block device path (e.g. /dev/sdb), optional if already mounted");
@@ -24,9 +25,14 @@ DEFINE_string(advertise_ip, "", "IP address to advertise to SRM (defaults to 127
 DEFINE_string(agent_hostname, "", "Optional hostname override reported to SRM");
 DEFINE_int32(agent_heartbeat_ms, 3000, "Heartbeat interval in milliseconds");
 DEFINE_int32(agent_register_backoff_ms, 5000, "Backoff between failed registrations in milliseconds");
+DEFINE_string(log_file, "", "Log file path (append). Empty = stdout/stderr");
 
 int main(int argc, char** argv) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
+    if (!RedirectLogs(FLAGS_log_file)) {
+        std::cerr << "Failed to open log file: " << FLAGS_log_file << std::endl;
+        return -1;
+    }
 
     DiskMountConfig cfg;
     cfg.device_path = FLAGS_device_path;

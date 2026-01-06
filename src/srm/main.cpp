@@ -12,6 +12,7 @@
 #include "gateway/RequestDispatcher.h"
 #include "simulation/VirtualNodeEngine.h"
 #include "simulation/SimulationConfig.h"
+#include "common/LogRedirect.h"
 
 DEFINE_int32(srm_port, 9100, "Port for SRM cluster manager service");
 DEFINE_string(mds_addr, "127.0.0.1:9000", "MDS service address for volume registration");
@@ -22,9 +23,14 @@ DEFINE_int32(virtual_max_latency_ms, 50, "Virtual node max latency (ms)");
 DEFINE_double(virtual_failure_rate, 0.0, "Virtual node failure rate (0.0-1.0)");
 DEFINE_int32(virtual_node_count, 0, "Number of virtual nodes to pre-register");
 DEFINE_uint64(virtual_node_capacity_bytes, 100ULL * 1024 * 1024 * 1024, "Capacity per virtual node in bytes");
+DEFINE_string(log_file, "", "Log file path (append). Empty = stdout/stderr");
 
 int main(int argc, char** argv) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
+    if (!RedirectLogs(FLAGS_log_file)) {
+        std::cerr << "Failed to open log file: " << FLAGS_log_file << std::endl;
+        return -1;
+    }
 
     auto manager = std::make_shared<StorageNodeManager>(
         std::chrono::seconds(FLAGS_heartbeat_timeout_sec),

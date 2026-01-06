@@ -13,6 +13,7 @@
 #include "../../../src/mds/server/Server.h"
 #include "../../../src/fs/volume/VolumeRegistry.h"
 #include "common/StatusUtils.h"
+#include "common/LogRedirect.h"
 
 DEFINE_int32(mds_port, 8010, "Port of MDS server");
 DEFINE_int32(mds_idle_timeout, -1, "Idle timeout of mds server (default: infinite)");
@@ -21,6 +22,7 @@ DEFINE_string(mds_data_dir, "/tmp/mds_rpc", "Base dir for inode/bitmap/dir_store
 DEFINE_bool(mds_create_new, true, "Create new metadata store");
 DEFINE_string(node_alloc_policy, "prefer_real", "Node allocation policy: prefer_real|prefer_virtual|round_robin");
 DEFINE_bool(enable_volume_registry, false, "Enable legacy volume registry/allocator");
+DEFINE_string(log_file, "", "Log file path (append). Empty = stdout/stderr");
 
 namespace {
 
@@ -474,6 +476,10 @@ private:
 
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
+    if (!RedirectLogs(FLAGS_log_file)) {
+        std::cerr << "Failed to open log file: " << FLAGS_log_file << std::endl;
+        return -1;
+    }
     brpc::Server server;
     MdsServiceImpl svc(FLAGS_mds_data_dir, FLAGS_mds_create_new);
     if (server.AddService(&svc, brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {

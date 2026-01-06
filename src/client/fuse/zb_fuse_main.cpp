@@ -13,6 +13,7 @@
 
 #include "client/mount/DfsClient.h"
 #include "client/mount/MountConfig.h"
+#include "common/LogRedirect.h"
 
 DEFINE_string(mds_addr, "127.0.0.1:9000", "MDS service address");
 DEFINE_string(srm_addr, "127.0.0.1:9100", "SRM Gateway service address");
@@ -20,6 +21,7 @@ DEFINE_string(node_id, "node-1", "Default node id to target on SRM/Real Node");
 DEFINE_string(mount_point, "/mnt/zbstorage", "Mount point");
 DEFINE_bool(allow_other, false, "Pass -o allow_other to FUSE so non-root users can access");
 DEFINE_bool(foreground, false, "Run FUSE in foreground (pass -f)");
+DEFINE_string(log_file, "", "Log file path (append). Empty = stdout/stderr");
 
 namespace {
 
@@ -170,6 +172,10 @@ struct fuse_operations BuildFuseOps() {
 
 int main(int argc, char* argv[]) {
     gflags::ParseCommandLineFlags(&argc, &argv, true);
+    if (!RedirectLogs(FLAGS_log_file)) {
+        std::cerr << "Failed to open log file: " << FLAGS_log_file << std::endl;
+        return 1;
+    }
 
     MountConfig cfg;
     cfg.mds_addr = FLAGS_mds_addr;

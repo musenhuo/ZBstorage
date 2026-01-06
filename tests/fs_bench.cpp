@@ -15,8 +15,12 @@
 #include <unistd.h>
 #include <vector>
 
+// Reuse common log redirection helper.
+#include "common/LogRedirect.h"
+
 struct Options {
     std::string path;
+    std::string log_file;
     int duration_sec = 30;
     int file_size_kb = 64;
     int files = 100;
@@ -44,7 +48,7 @@ static void PrintUsage(const char* prog) {
     std::fprintf(stderr,
                  "Usage: %s --path=DIR [--duration_sec=N] [--file_size_kb=N]\n"
                  "          [--files=N] [--threads=N] [--read_pct=0-100]\n"
-                 "          [--fsync] [--latency_samples=N]\n",
+                 "          [--fsync] [--latency_samples=N] [--log_file=PATH]\n",
                  prog);
 }
 
@@ -65,6 +69,8 @@ static bool ParseArgs(int argc, char* argv[], Options* opts) {
         };
         if (std::strncmp(arg, "--path=", 7) == 0) {
             opts->path = arg + 7;
+        } else if (std::strncmp(arg, "--log_file=", 11) == 0) {
+            opts->log_file = arg + 11;
         } else if (match("--duration_sec", &opts->duration_sec)) {
         } else if (match("--file_size_kb", &opts->file_size_kb)) {
         } else if (match("--files", &opts->files)) {
@@ -172,6 +178,12 @@ int main(int argc, char* argv[]) {
     if (!ParseArgs(argc, argv, &opts)) {
         PrintUsage(argv[0]);
         return 1;
+    }
+    if (!opts.log_file.empty()) {
+        if (!RedirectLogs(opts.log_file)) {
+            std::fprintf(stderr, "Failed to open log file: %s\n", opts.log_file.c_str());
+            return 2;
+        }
     }
 
     const std::string bench_dir = JoinPath(opts.path, "zb_bench");

@@ -45,18 +45,32 @@ rpc::StatusCode DfsClient::LookupInode(const std::string& path, InodeInfo& out_i
     rpc::PathRequest req;
     rpc::FindInodeReply resp;
     brpc::Controller cntl;
+    cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
     req.set_path(path);
     rpc_->mds()->FindInode(&cntl, &req, &resp, nullptr);
-    if (cntl.Failed()) return rpc::STATUS_NETWORK_ERROR;
+    if (cntl.Failed()) {
+        std::cerr << "[Client] FindInode failed path=" << path << " err=" << cntl.ErrorText() << std::endl;
+        return rpc::STATUS_NETWORK_ERROR;
+    }
     auto code = StatusUtils::NormalizeCode(resp.status().code());
     if (code != rpc::STATUS_SUCCESS) return code;
     out_info.inode = 0;
     // For safety, also call LookupIno to get inode number.
     rpc::LookupReply lresp;
     brpc::Controller lcntl;
+    lcntl.set_timeout_ms(cfg_.rpc_timeout_ms);
     rpc_->mds()->LookupIno(&lcntl, &req, &lresp, nullptr);
-    if (!lcntl.Failed() && StatusUtils::NormalizeCode(lresp.status().code()) == rpc::STATUS_SUCCESS) {
-        out_info.inode = lresp.inode();
+    if (!lcntl.Failed()) {
+        auto lcode = StatusUtils::NormalizeCode(lresp.status().code());
+        if (lcode == rpc::STATUS_SUCCESS) {
+            out_info.inode = lresp.inode();
+        } else {
+            std::cerr << "[Client] LookupIno failed path=" << path << " code=" << static_cast<int>(lcode) << std::endl;
+            return lcode;
+        }
+    } else {
+        std::cerr << "[Client] LookupIno RPC failed path=" << path << " err=" << lcntl.ErrorText() << std::endl;
+        return rpc::STATUS_NETWORK_ERROR;
     }
     out_info.volume_id = resp.volume_id();
     return rpc::STATUS_SUCCESS;
@@ -71,9 +85,13 @@ int DfsClient::GetAttr(const std::string& path, struct stat* st) {
     rpc::PathRequest req;
     rpc::FindInodeReply resp;
     brpc::Controller cntl;
+    cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
     req.set_path(path);
     rpc_->mds()->FindInode(&cntl, &req, &resp, nullptr);
-    if (cntl.Failed()) return -ECOMM;
+    if (cntl.Failed()) {
+        std::cerr << "[Client] GetAttr FindInode RPC failed path=" << path << " err=" << cntl.ErrorText() << std::endl;
+        return -ECOMM;
+    }
     if (!PopulateStatFromInode(resp, st)) return -EIO;
     return 0;
 }
@@ -83,9 +101,13 @@ int DfsClient::ReadDir(const std::string& path, void* buf, fuse_fill_dir_t fille
     rpc::PathRequest req;
     rpc::DirectoryListReply resp;
     brpc::Controller cntl;
+    cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
     req.set_path(path);
     rpc_->mds()->Ls(&cntl, &req, &resp, nullptr);
-    if (cntl.Failed()) return -ECOMM;
+    if (cntl.Failed()) {
+        std::cerr << "[Client] ReadDir RPC failed path=" << path << " err=" << cntl.ErrorText() << std::endl;
+        return -ECOMM;
+    }
     auto code = StatusUtils::NormalizeCode(resp.status().code());
     if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
 
@@ -112,10 +134,14 @@ int DfsClient::Create(const std::string& path, int flags, mode_t mode, int& out_
     rpc::PathModeRequest creq;
     rpc::Status cresp;
     brpc::Controller ccntl;
+    ccntl.set_timeout_ms(cfg_.rpc_timeout_ms);
     creq.set_path(path);
     creq.set_mode(static_cast<uint32_t>(mode));
     rpc_->mds()->CreateFile(&ccntl, &creq, &cresp, nullptr);
-    if (ccntl.Failed()) return -ECOMM;
+    if (ccntl.Failed()) {
+        std::cerr << "[Client] CreateFile RPC failed path=" << path << " err=" << ccntl.ErrorText() << std::endl;
+        return -ECOMM;
+    }
     auto ccode = StatusUtils::NormalizeCode(cresp.code());
     if (ccode != rpc::STATUS_SUCCESS) return -StatusToErrno(ccode);
     return Open(path, flags, out_fd);

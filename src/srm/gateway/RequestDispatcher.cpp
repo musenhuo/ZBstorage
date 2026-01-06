@@ -139,6 +139,8 @@ void RequestDispatcher::DispatchWrite(const storagenode::WriteRequest* req,
     NodeContext ctx;
     if (!manager_ || !manager_->GetNode(req->node_id(), ctx)) {
         FillStatus(resp->mutable_status(), rpc::STATUS_NODE_NOT_FOUND, "unknown node");
+        std::cout << "[Gateway] WriteResp code=" << resp->status().code()
+                  << " msg=" << resp->status().message() << std::endl;
         if (done) done->Run();
         return;
     }
@@ -159,6 +161,8 @@ void RequestDispatcher::DispatchWrite(const storagenode::WriteRequest* req,
     auto* stub = GetStub(ctx);
     if (!stub) {
         FillStatus(resp->mutable_status(), rpc::STATUS_NETWORK_ERROR, "failed to build channel");
+        std::cout << "[Gateway] WriteResp code=" << resp->status().code()
+                  << " msg=" << resp->status().message() << std::endl;
         if (done) done->Run();
         return;
     }
@@ -190,6 +194,8 @@ void RequestDispatcher::DispatchRead(const storagenode::ReadRequest* req,
     NodeContext ctx;
     if (!manager_ || !manager_->GetNode(req->node_id(), ctx)) {
         FillStatus(resp->mutable_status(), rpc::STATUS_NODE_NOT_FOUND, "unknown node");
+        std::cout << "[Gateway] ReadResp code=" << resp->status().code()
+                  << " msg=" << resp->status().message() << std::endl;
         if (done) done->Run();
         return;
     }
@@ -210,6 +216,8 @@ void RequestDispatcher::DispatchRead(const storagenode::ReadRequest* req,
     auto* stub = GetStub(ctx);
     if (!stub) {
         FillStatus(resp->mutable_status(), rpc::STATUS_NETWORK_ERROR, "failed to build channel");
+        std::cout << "[Gateway] ReadResp code=" << resp->status().code()
+                  << " msg=" << resp->status().message() << std::endl;
         if (done) done->Run();
         return;
     }

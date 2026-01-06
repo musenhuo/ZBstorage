@@ -13,7 +13,7 @@
 
 struct InodeInfo {
     uint64_t inode{0};
-    std::string volume_id;
+    std::string node_id;
 };
 
 class DfsClient {

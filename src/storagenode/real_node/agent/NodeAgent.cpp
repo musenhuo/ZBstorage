@@ -86,6 +86,8 @@ bool NodeAgent::DoRegister() {
     if (!channel_) {
         channel_ = std::make_unique<brpc::Channel>();
         brpc::ChannelOptions opts;
+        opts.timeout_ms = 3000;
+        opts.max_retry = 1;
         if (channel_->Init(srm_addr_.c_str(), &opts) != 0) {
             std::cerr << "[NodeAgent] Failed to init channel to SRM at " << srm_addr_ << std::endl;
             channel_.reset();
@@ -100,6 +102,7 @@ bool NodeAgent::DoRegister() {
     storagenode::RegisterRequest req;
     storagenode::RegisterResponse resp;
     brpc::Controller cntl;
+    cntl.set_timeout_ms(3000);
     req.set_ip(advertise_ip_.empty() ? "127.0.0.1" : advertise_ip_);
     req.set_port(listen_port_);
     req.set_hostname(hostname_override_.empty() ? ResolveHostname() : hostname_override_);
@@ -125,6 +128,7 @@ bool NodeAgent::DoHeartbeat() {
     storagenode::HeartbeatRequest req;
     storagenode::HeartbeatResponse resp;
     brpc::Controller cntl;
+    cntl.set_timeout_ms(3000);
 
     req.set_node_id(node_id_);
     req.set_timestamp_ms(NowMs());

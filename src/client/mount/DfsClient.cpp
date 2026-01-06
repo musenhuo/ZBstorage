@@ -72,7 +72,7 @@ rpc::StatusCode DfsClient::LookupInode(const std::string& path, InodeInfo& out_i
         std::cerr << "[Client] LookupIno RPC failed path=" << path << " err=" << lcntl.ErrorText() << std::endl;
         return rpc::STATUS_NETWORK_ERROR;
     }
-    out_info.volume_id = resp.volume_id();
+    out_info.node_id = !resp.node_id().empty() ? resp.node_id() : resp.volume_id();
     return rpc::STATUS_SUCCESS;
 }
 
@@ -156,7 +156,7 @@ int DfsClient::Read(int fd, char* buf, size_t size, off_t offset, ssize_t& out_b
     storagenode::ReadReply resp;
     brpc::Controller cntl;
     cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
-    const std::string& node_id = it->second.volume_id.empty() ? cfg_.default_node_id : it->second.volume_id;
+    const std::string& node_id = it->second.node_id.empty() ? cfg_.default_node_id : it->second.node_id;
     req.set_node_id(node_id);
     req.set_chunk_id(static_cast<uint64_t>(it->second.inode));
     req.set_offset(static_cast<uint64_t>(offset));
@@ -184,7 +184,7 @@ int DfsClient::Write(int fd, const char* buf, size_t size, off_t offset, ssize_t
     storagenode::WriteReply resp;
     brpc::Controller cntl;
     cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
-    const std::string& node_id = it->second.volume_id.empty() ? cfg_.default_node_id : it->second.volume_id;
+    const std::string& node_id = it->second.node_id.empty() ? cfg_.default_node_id : it->second.node_id;
     req.set_node_id(node_id);
     req.set_chunk_id(static_cast<uint64_t>(it->second.inode));
     req.set_offset(static_cast<uint64_t>(offset));

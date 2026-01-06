@@ -6,7 +6,9 @@
 #include <filesystem>
 #include <iostream>
 #include <algorithm>
+#include <mutex>
 #include <sstream>
+#include <unordered_map>
 #include "mds.pb.h"
 #include "../../../src/mds/server/Server.h"
 #include "../../../src/fs/volume/VolumeRegistry.h"
@@ -17,6 +19,7 @@ DEFINE_int32(mds_idle_timeout, -1, "Idle timeout of mds server (default: infinit
 DEFINE_int32(mds_thread_num, 4, "Worker threads");
 DEFINE_string(mds_data_dir, "/tmp/mds_rpc", "Base dir for inode/bitmap/dir_store");
 DEFINE_bool(mds_create_new, true, "Create new metadata store");
+DEFINE_string(node_alloc_policy, "prefer_real", "Node allocation policy: prefer_real|prefer_virtual|round_robin");
 
 namespace {
 
@@ -130,7 +133,30 @@ public:
                     rpc::Status* response,
                     ::google::protobuf::Closure* done) override {
         brpc::ClosureGuard guard(done);
-        response->CopyFrom(ToStatus(mds_->CreateFile(request->path(), static_cast<mode_t>(request->mode()))));
+        const std::string node_id = PickNodeId();
+        if (node_id.empty()) {
+            StatusUtils::SetStatus(response, rpc::STATUS_NODE_NOT_FOUND, "no available nodes");
+            LogRequest("CreateFile", request->path(), response);
+            return;
+        }
+        if (!mds_->CreateFile(request->path(), static_cast<mode_t>(request->mode()))) {
+            StatusUtils::SetStatus(response, rpc::STATUS_IO_ERROR, "create file failed");
+            LogRequest("CreateFile", request->path(), response);
+            return;
+        }
+        auto inode = mds_->FindInodeByPath(request->path());
+        if (!inode) {
+            StatusUtils::SetStatus(response, rpc::STATUS_IO_ERROR, "inode not found after create");
+            LogRequest("CreateFile", request->path(), response);
+            return;
+        }
+        inode->setVolumeId(node_id);
+        if (!mds_->WriteInode(inode->inode, *inode)) {
+            StatusUtils::SetStatus(response, rpc::STATUS_IO_ERROR, "write inode failed");
+            LogRequest("CreateFile", request->path(), response);
+            return;
+        }
+        StatusUtils::SetStatus(response, rpc::STATUS_SUCCESS, "");
         LogRequest("CreateFile", request->path(), response);
     }
 
@@ -213,8 +239,34 @@ public:
         }
         SerializeInode(*inode, response->mutable_inode());
         response->set_volume_id(inode->getVolumeUUID());
+        response->set_node_id(inode->getVolumeUUID());
         StatusUtils::SetStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
         LogRequest("FindInode", request->path(), response->mutable_status());
+    }
+
+    void RegisterNode(::google::protobuf::RpcController*,
+                      const rpc::RegisterNodeRequest* request,
+                      rpc::RegisterNodeReply* response,
+                      ::google::protobuf::Closure* done) override {
+        brpc::ClosureGuard guard(done);
+        if (!request || request->node().node_id().empty()) {
+            StatusUtils::SetStatus(response->mutable_status(),
+                                   rpc::STATUS_INVALID_ARGUMENT,
+                                   "missing node_id");
+            LogRequest("RegisterNode", "<empty>", response->mutable_status());
+            return;
+        }
+        const std::string node_id = request->node().node_id();
+        {
+            std::lock_guard<std::mutex> lk(node_mu_);
+            auto it = nodes_.find(node_id);
+            if (it == nodes_.end()) {
+                node_order_.push_back(node_id);
+            }
+            nodes_[node_id] = request->node();
+        }
+        StatusUtils::SetStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
+        LogRequest("RegisterNode", node_id, response->mutable_status());
     }
 
     void WriteInode(::google::protobuf::RpcController*,
@@ -331,8 +383,43 @@ public:
     }
 
 private:
+    std::string PickNodeId() {
+        std::lock_guard<std::mutex> lk(node_mu_);
+        if (node_order_.empty()) {
+            return {};
+        }
+        const std::string policy = FLAGS_node_alloc_policy;
+        auto pick_by_type = [&](rpc::NodeType type) -> std::string {
+            for (const auto& id : node_order_) {
+                auto it = nodes_.find(id);
+                if (it != nodes_.end() && it->second.node_type() == type) {
+                    return id;
+                }
+            }
+            return {};
+        };
+        if (policy == "prefer_virtual") {
+            auto id = pick_by_type(rpc::NODE_VIRTUAL);
+            if (!id.empty()) return id;
+        } else if (policy == "prefer_real") {
+            auto id = pick_by_type(rpc::NODE_REAL);
+            if (!id.empty()) return id;
+        } else if (policy == "round_robin") {
+            if (node_order_.empty()) return {};
+            rr_cursor_ = rr_cursor_ % node_order_.size();
+            auto id = node_order_[rr_cursor_++];
+            return id;
+        }
+        // Fallback: first known node
+        return node_order_.front();
+    }
+
     std::string base_dir_;
     std::shared_ptr<MdsServer> mds_;
+    std::mutex node_mu_;
+    std::unordered_map<std::string, rpc::NodeInfo> nodes_;
+    std::vector<std::string> node_order_;
+    size_t rr_cursor_{0};
 };
 
 int main(int argc, char* argv[]) {

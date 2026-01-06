@@ -13,12 +13,10 @@
 
 StorageNodeManager::StorageNodeManager(std::chrono::milliseconds heartbeat_timeout,
                                        std::chrono::milliseconds health_check_interval,
-                                       std::string mds_addr,
-                                       VolumePolicy policy)
+                                       std::string mds_addr)
     : heartbeat_timeout_(heartbeat_timeout),
       health_check_interval_(health_check_interval),
-      mds_addr_(std::move(mds_addr)),
-      volume_policy_(policy) {}
+      mds_addr_(std::move(mds_addr)) {}
 
 StorageNodeManager::~StorageNodeManager() {
     Stop();
@@ -78,7 +76,7 @@ void StorageNodeManager::HandleRegister(const storagenode::RegisterRequest* requ
     StatusUtils::SetStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
     NodeContext added;
     if (registry_.Get(node_id, added)) {
-        RegisterToMDS(added);
+        std::thread([this, added]() { RegisterToMDS(added); }).detach();
     }
 }
 
@@ -145,7 +143,7 @@ void StorageNodeManager::AddVirtualNode(const std::string& node_id, const Simula
     registry_.Upsert(std::move(ctx));
     NodeContext added;
     if (registry_.Get(node_id, added)) {
-        RegisterToMDS(added);
+        std::thread([this, added]() { RegisterToMDS(added); }).detach();
     }
 }
 
@@ -153,47 +151,31 @@ void StorageNodeManager::RegisterToMDS(const NodeContext& ctx) {
     if (!mds_stub_) {
         return;
     }
-    uint64_t capacity_bytes = 100ULL * 1024 * 1024 * 1024; // default 100GB
-    if (!ctx.disks.empty() && ctx.disks[0].total_bytes() > 0) {
+    rpc::RegisterNodeRequest req;
+    auto* node = req.mutable_node();
+    node->set_node_id(ctx.node_id);
+    node->set_ip(ctx.ip);
+    node->set_port(static_cast<uint32_t>(ctx.port));
+    uint64_t capacity_bytes = 0;
+    uint64_t free_bytes = 0;
+    if (!ctx.disks.empty()) {
         capacity_bytes = ctx.disks[0].total_bytes();
+        free_bytes = ctx.disks[0].free_bytes();
     }
-    uint64_t total_blocks = capacity_bytes / 4096;
+    node->set_capacity_bytes(capacity_bytes);
+    node->set_free_bytes(free_bytes);
+    node->set_node_type(ctx.type == NodeType::Virtual ? rpc::NODE_VIRTUAL : rpc::NODE_REAL);
 
-    const std::string volume_path = "/virtual"; // placeholder path
-    const size_t block_size = 4096;
-    const size_t blocks_per_group = 64;
-    auto vol = std::make_shared<Volume>(ctx.node_id, volume_path, total_blocks, block_size, blocks_per_group);
-
-    auto data = vol->serialize();
-
-    rpc::RegisterVolumeRequest req;
-    req.mutable_volume()->set_data(data.data(), data.size());
-    req.set_type(static_cast<uint32_t>(ResolveVolumeType(ctx)));
-    req.set_persist_now(false);
-
-    rpc::RegisterVolumeReply resp;
+    rpc::RegisterNodeReply resp;
     brpc::Controller cntl;
-    mds_stub_->RegisterVolume(&cntl, &req, &resp, nullptr);
+    mds_stub_->RegisterNode(&cntl, &req, &resp, nullptr);
     if (cntl.Failed()) {
-        std::cerr << "[SRM] RegisterVolume to MDS failed for node " << ctx.node_id
+        std::cerr << "[SRM] RegisterNode to MDS failed for node " << ctx.node_id
                   << ": " << cntl.ErrorText() << std::endl;
     } else if (resp.status().code() != 0) {
-        std::cerr << "[SRM] RegisterVolume rejected for node " << ctx.node_id
+        std::cerr << "[SRM] RegisterNode rejected for node " << ctx.node_id
                   << " code=" << resp.status().code() << " msg=" << resp.status().message() << std::endl;
     } else {
-        std::cerr << "[SRM] Synced node " << ctx.node_id << " to MDS volume index "
-                  << resp.index() << std::endl;
-    }
-}
-
-VolumeType StorageNodeManager::ResolveVolumeType(const NodeContext& ctx) const {
-    switch (volume_policy_) {
-        case VolumePolicy::PreferReal:
-            return (ctx.type == NodeType::Virtual) ? VolumeType::HDD : VolumeType::SSD;
-        case VolumePolicy::PreferVirtual:
-            return (ctx.type == NodeType::Virtual) ? VolumeType::SSD : VolumeType::HDD;
-        case VolumePolicy::AllSsd:
-        default:
-            return VolumeType::SSD;
+        std::cerr << "[SRM] Synced node " << ctx.node_id << " to MDS node registry" << std::endl;
     }
 }

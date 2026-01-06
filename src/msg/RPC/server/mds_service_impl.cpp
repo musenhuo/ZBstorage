@@ -93,6 +93,8 @@ public:
         }
         mds_ = std::make_shared<MdsServer>(inode_path, bitmap_path, dir_store, create_new);
         mds_->set_volume_registry(make_file_volume_registry(base_dir_));
+        // Ensure root inode exists to avoid later I/O errors when accessing "/"
+        mds_->CreateRoot();
     }
 
     void CreateRoot(::google::protobuf::RpcController*,

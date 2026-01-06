@@ -163,6 +163,7 @@ void RequestDispatcher::DispatchWrite(const storagenode::WriteRequest* req,
         return;
     }
     auto real_cntl = std::make_unique<brpc::Controller>();
+    real_cntl->set_timeout_ms(3000);
     auto real_resp = std::make_unique<storagenode::WriteReply>();
     auto* callback = new RealNodeWriteCallback(resp, done, std::move(real_cntl), std::move(real_resp));
     stub->Write(callback->controller(), req, callback->real_resp(), callback);
@@ -213,6 +214,7 @@ void RequestDispatcher::DispatchRead(const storagenode::ReadRequest* req,
         return;
     }
     auto real_cntl = std::make_unique<brpc::Controller>();
+    real_cntl->set_timeout_ms(3000);
     auto real_resp = std::make_unique<storagenode::ReadReply>();
     auto* callback = new RealNodeReadCallback(resp, done, std::move(real_cntl), std::move(real_resp));
     stub->Read(callback->controller(), req, callback->real_resp(), callback);
@@ -228,6 +230,8 @@ storagenode::StorageService_Stub* RequestDispatcher::GetStub(const NodeContext& 
     auto entry = StubEntry{};
     entry.channel = std::make_unique<brpc::Channel>();
     brpc::ChannelOptions opts;
+    opts.timeout_ms = 3000;
+    opts.max_retry = 1;
     const std::string addr = ctx.ip + ":" + std::to_string(ctx.port);
     if (entry.channel->Init(addr.c_str(), &opts) != 0) {
         std::cerr << "[Gateway] failed to init channel to " << addr << std::endl;

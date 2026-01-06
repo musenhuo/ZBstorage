@@ -33,11 +33,9 @@ void StorageNodeManager::Start() {
         opts.timeout_ms = 2000;
         opts.max_retry = 1;
         if (mds_channel_->Init(mds_addr_.c_str(), &opts) != 0) {
-            std::cerr << "[SRM] Failed to init MDS channel to " << mds_addr_ << std::endl;
             mds_channel_.reset();
         } else {
             mds_stub_ = std::make_unique<rpc::MdsService_Stub>(mds_channel_.get());
-            std::cerr << "[SRM] Connected to MDS at " << mds_addr_ << std::endl;
         }
     }
     health_thread_ = std::thread([this]() { HealthLoop(); });
@@ -75,8 +73,6 @@ void StorageNodeManager::HandleRegister(const storagenode::RegisterRequest* requ
     registry_.Upsert(std::move(ctx));
     response->set_node_id(ctx.node_id);
     StatusUtils::SetStatus(response->mutable_status(), rpc::STATUS_SUCCESS, "");
-    std::cerr << "[SRM] node registered id=" << response->node_id() << " ip=" << request->ip()
-              << ":" << request->port() << " disks=" << request->disks_size() << std::endl;
     NodeContext added;
     if (registry_.Get(response->node_id(), added)) {
         RegisterToMDS(added);
@@ -112,8 +108,6 @@ void StorageNodeManager::HealthLoop() {
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.last_heartbeat);
             if (elapsed > heartbeat_timeout_ && ctx.state != NodeState::Offline) {
                 registry_.MarkOffline(ctx.node_id);
-                std::cerr << "[SRM] node offline id=" << ctx.node_id
-                          << " elapsed_ms=" << elapsed.count() << std::endl;
             }
         }
         std::this_thread::sleep_for(health_check_interval_);

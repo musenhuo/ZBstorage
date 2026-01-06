@@ -129,13 +129,17 @@ int DfsClient::Read(int fd, char* buf, size_t size, off_t offset, ssize_t& out_b
     storagenode::ReadRequest req;
     storagenode::ReadReply resp;
     brpc::Controller cntl;
+    cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
     const std::string& node_id = it->second.volume_id.empty() ? cfg_.default_node_id : it->second.volume_id;
     req.set_node_id(node_id);
     req.set_chunk_id(static_cast<uint64_t>(it->second.inode));
     req.set_offset(static_cast<uint64_t>(offset));
     req.set_length(static_cast<uint64_t>(size));
     rpc_->srm()->Read(&cntl, &req, &resp, nullptr);
-    if (cntl.Failed()) return -ECOMM;
+    if (cntl.Failed()) {
+        std::cerr << "[Client] Read RPC failed: " << cntl.ErrorText() << std::endl;
+        return -ECOMM;
+    }
     auto code = StatusUtils::NormalizeCode(resp.status().code());
     if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
     out_bytes = static_cast<ssize_t>(resp.bytes_read());
@@ -153,6 +157,7 @@ int DfsClient::Write(int fd, const char* buf, size_t size, off_t offset, ssize_t
     storagenode::WriteRequest req;
     storagenode::WriteReply resp;
     brpc::Controller cntl;
+    cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
     const std::string& node_id = it->second.volume_id.empty() ? cfg_.default_node_id : it->second.volume_id;
     req.set_node_id(node_id);
     req.set_chunk_id(static_cast<uint64_t>(it->second.inode));
@@ -163,7 +168,10 @@ int DfsClient::Write(int fd, const char* buf, size_t size, off_t offset, ssize_t
     req.set_mode(0644);
 
     rpc_->srm()->Write(&cntl, &req, &resp, nullptr);
-    if (cntl.Failed()) return -ECOMM;
+    if (cntl.Failed()) {
+        std::cerr << "[Client] Write RPC failed: " << cntl.ErrorText() << std::endl;
+        return -ECOMM;
+    }
     auto code = StatusUtils::NormalizeCode(resp.status().code());
     if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
     out_bytes = static_cast<ssize_t>(resp.bytes_written());

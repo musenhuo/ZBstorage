@@ -115,8 +115,6 @@ bool NodeAgent::DoRegister() {
         return false;
     }
     node_id_ = resp.node_id();
-    std::cout << "[NodeAgent] Registered to SRM with node_id=" << node_id_
-              << " ip=" << req.ip() << ":" << req.port() << std::endl;
     return true;
 }
 

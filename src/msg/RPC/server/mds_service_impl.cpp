@@ -20,6 +20,7 @@ DEFINE_int32(mds_thread_num, 4, "Worker threads");
 DEFINE_string(mds_data_dir, "/tmp/mds_rpc", "Base dir for inode/bitmap/dir_store");
 DEFINE_bool(mds_create_new, true, "Create new metadata store");
 DEFINE_string(node_alloc_policy, "prefer_real", "Node allocation policy: prefer_real|prefer_virtual|round_robin");
+DEFINE_bool(enable_volume_registry, false, "Enable legacy volume registry/allocator");
 
 namespace {
 
@@ -96,7 +97,9 @@ public:
             std::filesystem::create_directories("/tmp/zbstorage_kv", ec);
         }
         mds_ = std::make_shared<MdsServer>(inode_path, bitmap_path, dir_store, create_new);
-        mds_->set_volume_registry(make_file_volume_registry(base_dir_));
+        if (FLAGS_enable_volume_registry) {
+            mds_->set_volume_registry(make_file_volume_registry(base_dir_));
+        }
         // Ensure root inode exists to avoid later I/O errors when accessing "/"
         mds_->CreateRoot();
     }

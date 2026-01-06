@@ -2,6 +2,7 @@
 
 #include <brpc/controller.h>
 #include <cstring>
+#include <fcntl.h>
 #include <unistd.h>
 
 #include "mds.pb.h"
@@ -25,13 +26,12 @@ int DfsClient::StatusToErrno(rpc::StatusCode code) const {
     }
 }
 
-bool DfsClient::PopulateStatFromInode(const rpc::FindInodeReply& reply, struct stat* st) const {
+bool DfsClient::PopulateStat(struct stat* st, bool is_dir) const {
     if (!st) return false;
     std::memset(st, 0, sizeof(struct stat));
-    // Default regular file with 0644 perms; size unknown (set 0).
-    st->st_mode = S_IFREG | 0644;
+    st->st_mode = (is_dir ? (S_IFDIR | 0755) : (S_IFREG | 0644));
     st->st_size = 0;
-    st->st_nlink = 1;
+    st->st_nlink = is_dir ? 2 : 1;
     st->st_uid = 0;
     st->st_gid = 0;
     st->st_atime = 0;
@@ -90,18 +90,22 @@ int DfsClient::GetAttr(const std::string& path, struct stat* st) {
                   << " code=" << static_cast<int>(code) << std::endl;
         return -StatusToErrno(code);
     }
-
-    rpc::PathRequest req;
-    rpc::FindInodeReply resp;
-    brpc::Controller cntl;
-    cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
-    req.set_path(path);
-    rpc_->mds()->FindInode(&cntl, &req, &resp, nullptr);
-    if (cntl.Failed()) {
-        std::cerr << "[Client] GetAttr FindInode RPC failed path=" << path << " err=" << cntl.ErrorText() << std::endl;
-        return -ECOMM;
+    bool is_dir = (path == "/");
+    if (!is_dir) {
+        rpc::PathRequest lreq;
+        rpc::DirectoryListReply lresp;
+        brpc::Controller lcntl;
+        lcntl.set_timeout_ms(cfg_.rpc_timeout_ms);
+        lreq.set_path(path);
+        rpc_->mds()->Ls(&lcntl, &lreq, &lresp, nullptr);
+        if (!lcntl.Failed()) {
+            auto lcode = StatusUtils::NormalizeCode(lresp.status().code());
+            if (lcode == rpc::STATUS_SUCCESS) {
+                is_dir = true;
+            }
+        }
     }
-    if (!PopulateStatFromInode(resp, st)) return -EIO;
+    if (!PopulateStat(st, is_dir)) return -EIO;
     return 0;
 }
 
@@ -131,7 +135,12 @@ int DfsClient::ReadDir(const std::string& path, void* buf, fuse_fill_dir_t fille
 int DfsClient::Open(const std::string& path, int flags, int& out_fd) {
     InodeInfo info;
     auto code = LookupInode(path, info);
-    if (code != rpc::STATUS_SUCCESS) return -StatusToErrno(code);
+    if (code != rpc::STATUS_SUCCESS) {
+        if (code == rpc::STATUS_NODE_NOT_FOUND && (flags & O_CREAT) != 0) {
+            return Create(path, flags, 0644, out_fd);
+        }
+        return -StatusToErrno(code);
+    }
     int fd = next_fd_++;
     fd_info_[fd] = info;
     out_fd = fd;
@@ -159,6 +168,95 @@ int DfsClient::Create(const std::string& path, int flags, mode_t mode, int& out_
         return -StatusToErrno(ccode);
     }
     return Open(path, flags, out_fd);
+}
+
+int DfsClient::Mkdir(const std::string& path, mode_t mode) {
+    if (!rpc_ || !rpc_->mds()) return -ECOMM;
+    rpc::PathModeRequest req;
+    rpc::Status resp;
+    brpc::Controller cntl;
+    cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
+    req.set_path(path);
+    req.set_mode(static_cast<uint32_t>(mode));
+    rpc_->mds()->Mkdir(&cntl, &req, &resp, nullptr);
+    if (cntl.Failed()) {
+        std::cerr << "[Client] Mkdir RPC failed path=" << path << " err=" << cntl.ErrorText() << std::endl;
+        return -ECOMM;
+    }
+    auto code = StatusUtils::NormalizeCode(resp.code());
+    if (code != rpc::STATUS_SUCCESS) {
+        std::cerr << "[Client] Mkdir failed path=" << path
+                  << " code=" << static_cast<int>(code)
+                  << " msg=" << resp.message() << std::endl;
+        return -StatusToErrno(code);
+    }
+    return 0;
+}
+
+int DfsClient::Rmdir(const std::string& path) {
+    if (!rpc_ || !rpc_->mds()) return -ECOMM;
+    rpc::PathRequest req;
+    rpc::Status resp;
+    brpc::Controller cntl;
+    cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
+    req.set_path(path);
+    rpc_->mds()->Rmdir(&cntl, &req, &resp, nullptr);
+    if (cntl.Failed()) {
+        std::cerr << "[Client] Rmdir RPC failed path=" << path << " err=" << cntl.ErrorText() << std::endl;
+        return -ECOMM;
+    }
+    auto code = StatusUtils::NormalizeCode(resp.code());
+    if (code != rpc::STATUS_SUCCESS) {
+        std::cerr << "[Client] Rmdir failed path=" << path
+                  << " code=" << static_cast<int>(code)
+                  << " msg=" << resp.message() << std::endl;
+        return -StatusToErrno(code);
+    }
+    return 0;
+}
+
+int DfsClient::Unlink(const std::string& path) {
+    if (!rpc_ || !rpc_->mds()) return -ECOMM;
+    rpc::PathRequest req;
+    rpc::RemoveFileReply resp;
+    brpc::Controller cntl;
+    cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
+    req.set_path(path);
+    rpc_->mds()->RemoveFile(&cntl, &req, &resp, nullptr);
+    if (cntl.Failed()) {
+        std::cerr << "[Client] Unlink RPC failed path=" << path << " err=" << cntl.ErrorText() << std::endl;
+        return -ECOMM;
+    }
+    auto code = StatusUtils::NormalizeCode(resp.status().code());
+    if (code != rpc::STATUS_SUCCESS) {
+        std::cerr << "[Client] Unlink failed path=" << path
+                  << " code=" << static_cast<int>(code)
+                  << " msg=" << resp.status().message() << std::endl;
+        return -StatusToErrno(code);
+    }
+    return 0;
+}
+
+int DfsClient::Truncate(const std::string& path) {
+    if (!rpc_ || !rpc_->mds()) return -ECOMM;
+    rpc::PathRequest req;
+    rpc::Status resp;
+    brpc::Controller cntl;
+    cntl.set_timeout_ms(cfg_.rpc_timeout_ms);
+    req.set_path(path);
+    rpc_->mds()->TruncateFile(&cntl, &req, &resp, nullptr);
+    if (cntl.Failed()) {
+        std::cerr << "[Client] Truncate RPC failed path=" << path << " err=" << cntl.ErrorText() << std::endl;
+        return -ECOMM;
+    }
+    auto code = StatusUtils::NormalizeCode(resp.code());
+    if (code != rpc::STATUS_SUCCESS) {
+        std::cerr << "[Client] Truncate failed path=" << path
+                  << " code=" << static_cast<int>(code)
+                  << " msg=" << resp.message() << std::endl;
+        return -StatusToErrno(code);
+    }
+    return 0;
 }
 
 int DfsClient::Read(int fd, char* buf, size_t size, off_t offset, ssize_t& out_bytes) {

@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(Threads REQUIRED)
+
 # Gather all .cpp test sources in this directory and subdirectories
 file(GLOB_RECURSE TEST_SRCS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
@@ -64,6 +66,7 @@ foreach(src ${TEST_SRCS})
     ${PROJECT_ROOT}/third_party
   )
   target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter)
+  target_link_libraries(${target} PRIVATE Threads::Threads)
   if(ENABLE_ZBSS_LOG)
     target_compile_definitions(${target} PRIVATE ZBSS_ENABLE_LOG)
     # Allow overriding default log level at compile time

@@ -25,13 +25,17 @@ public:
     int ReadDir(const std::string& path, void* buf, fuse_fill_dir_t filler);
     int Open(const std::string& path, int flags, int& out_fd);
     int Create(const std::string& path, int flags, mode_t mode, int& out_fd);
+    int Mkdir(const std::string& path, mode_t mode);
+    int Rmdir(const std::string& path);
+    int Unlink(const std::string& path);
+    int Truncate(const std::string& path);
     int Read(int fd, char* buf, size_t size, off_t offset, ssize_t& out_bytes);
     int Write(int fd, const char* buf, size_t size, off_t offset, ssize_t& out_bytes);
     int Close(int fd);
 
 private:
     int StatusToErrno(rpc::StatusCode code) const;
-    bool PopulateStatFromInode(const rpc::FindInodeReply& reply, struct stat* st) const;
+    bool PopulateStat(struct stat* st, bool is_dir) const;
     rpc::StatusCode LookupInode(const std::string& path, InodeInfo& out_info);
 
     MountConfig cfg_;

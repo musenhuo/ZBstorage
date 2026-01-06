@@ -5,8 +5,11 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <fcntl.h>
 #include <memory>
 #include <string>
+#include <sys/stat.h>
+#include <time.h>
 
 #include "client/mount/DfsClient.h"
 #include "client/mount/MountConfig.h"
@@ -61,6 +64,49 @@ int fuse_create_cb(const char* path, mode_t mode, struct fuse_file_info* fi) {
     return rc;
 }
 
+int fuse_mknod_cb(const char* path, mode_t mode, dev_t rdev) {
+    (void)rdev;
+    if (!g_client) return -ECOMM;
+    if (S_ISREG(mode)) {
+        int fd = -1;
+        int rc = g_client->Create(path, O_CREAT | O_WRONLY, mode, fd);
+        if (rc == 0) {
+            g_client->Close(fd);
+        }
+        return rc;
+    }
+    return -ENOTSUP;
+}
+
+int fuse_mkdir_cb(const char* path, mode_t mode) {
+    if (!g_client) return -ECOMM;
+    return g_client->Mkdir(path, mode);
+}
+
+int fuse_rmdir_cb(const char* path) {
+    if (!g_client) return -ECOMM;
+    return g_client->Rmdir(path);
+}
+
+int fuse_unlink_cb(const char* path) {
+    if (!g_client) return -ECOMM;
+    return g_client->Unlink(path);
+}
+
+int fuse_truncate_cb(const char* path, off_t size) {
+    if (!g_client) return -ECOMM;
+    if (size != 0) {
+        return -ENOTSUP;
+    }
+    return g_client->Truncate(path);
+}
+
+int fuse_utimens_cb(const char* path, const struct timespec ts[2]) {
+    (void)path;
+    (void)ts;
+    return 0;
+}
+
 int fuse_read_cb(const char* path, char* buf, size_t size, off_t offset,
                  struct fuse_file_info* fi) {
     (void)path;
@@ -87,6 +133,19 @@ int fuse_release_cb(const char* path, struct fuse_file_info* fi) {
     return g_client->Close(static_cast<int>(fi->fh));
 }
 
+int fuse_flush_cb(const char* path, struct fuse_file_info* fi) {
+    (void)path;
+    (void)fi;
+    return 0;
+}
+
+int fuse_fsync_cb(const char* path, int isdatasync, struct fuse_file_info* fi) {
+    (void)path;
+    (void)isdatasync;
+    (void)fi;
+    return 0;
+}
+
 struct fuse_operations BuildFuseOps() {
     struct fuse_operations ops {};
     ops.getattr = fuse_getattr_cb;
@@ -96,6 +155,14 @@ struct fuse_operations BuildFuseOps() {
     ops.write = fuse_write_cb;
     ops.release = fuse_release_cb;
     ops.create = fuse_create_cb;
+    ops.flush = fuse_flush_cb;
+    ops.fsync = fuse_fsync_cb;
+    ops.mknod = fuse_mknod_cb;
+    ops.mkdir = fuse_mkdir_cb;
+    ops.rmdir = fuse_rmdir_cb;
+    ops.unlink = fuse_unlink_cb;
+    ops.truncate = fuse_truncate_cb;
+    ops.utimens = fuse_utimens_cb;
     return ops;
 }
 

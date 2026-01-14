@@ -133,7 +133,7 @@ bool write_one_batch(const fs::path& out_dir,
 } // namespace
 
 int main() {
-    const fs::path output_dir = "/mnt/md0/inode";
+    const fs::path output_dir = "/mnt/md0/inodeNS";
     std::error_code ec;
     fs::create_directories(output_dir, ec);
     if (ec) {

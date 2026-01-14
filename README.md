@@ -81,3 +81,17 @@ sudo ./client/fuse/zb_fuse_client \
 --seed：生成数据的随机种子（便于复现）
 --log_file：日志文件路径（追加写入）
 
+
+./tests/build/test_inode_capacity_sim \
+  --inode_dir /mnt/md0/inodeNS \
+  --json_log /mnt/md0/Projects/ZBStorage/inode_capacity_log.json \
+  --ssd_nodes 1001 --hdd_nodes 1001 --mix_nodes 1001 \
+  --ssd_devices_per_node 1 --hdd_devices_per_node 1 \
+  --ssd_capacity_bytes $((350*1024*1024*1024*1024)) \
+  --hdd_capacity_bytes $((50*1024*1024*1024*1024)) \
+  --report_interval_sec 60 \
+  --start_file inode_chunk_0.bin \
+  --start_index 0
+
+  ./tests/build/test_inode_dump --file /mnt/md0/inodeNS/inode_chunk_0.bin --count 5 --offset 0
+

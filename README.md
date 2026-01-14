@@ -81,6 +81,25 @@ sudo ./client/fuse/zb_fuse_client \
 --seed：生成数据的随机种子（便于复现）
 --log_file：日志文件路径（追加写入）
 
+下一步：
+多个real node协同
+增加virtual node
+josn日志信息
+
+fio --name=zbfs \
+  --directory=/mnt/md0/Projects/tmp_zb/loacl_zb \
+  --rw=randrw --rwmixread=70 \
+  --bs=256k --size=256m --numjobs=2 --iodepth=1 \
+  --ioengine=sync --direct=0 --time_based --runtime=60 \
+  --group_reporting --fallocate=none
+
+fio --name=zbfs \
+  --directory=/mnt/md0/Projects/tmp_zb/mp_zb \
+  --rw=randrw --rwmixread=70 \
+  --bs=256k --size=256m --numjobs=2 --iodepth=1 \
+  --ioengine=sync --direct=0 --time_based --runtime=60 \
+  --group_reporting --fallocate=none
+
 
 ./tests/build/test_inode_capacity_sim \
   --inode_dir /mnt/md0/inodeNS \

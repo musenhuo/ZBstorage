@@ -243,6 +243,8 @@ void Consume(std::vector<DeviceState>& devices, uint64_t& remaining) {
     }
 }
 
+} // namespace
+
 int main(int argc, char** argv) {
     Options opts;
     if (!ParseArgs(argc, argv, opts)) {

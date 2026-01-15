@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -31,6 +32,7 @@ struct Options {
     uint64_t hdd_capacity_bytes{0};
     uint32_t report_interval_sec{1};
     uint32_t print_limit_nodes{0};
+    uint32_t max_inodes_per_sec{0};
 };
 
 struct DeviceState {
@@ -69,7 +71,7 @@ void PrintUsage(const char* prog) {
               << "  --hdd_capacity_bytes <N>   HDD device capacity bytes\n"
               << "  --report_interval_sec <N>  report interval in seconds (default 1)\n"
               << "  --max_inodes <N>           max inodes to process (0 = all)\n"
-              << "  --print_limit_nodes <N>    limit node prints per report (0 = all)\n"
+              << "  --print_limit_nodes <N>    limit node prints per report (0 = all)\n  --max_inodes_per_sec <N>  max inodes to process per second (0 = unlimited)\n"
               << "  --start_file <name>        start from this inode file (name or full path)\n"
               << "  --start_index <N>          start inode index within start_file (default 0)\n";
 }
@@ -396,6 +398,8 @@ int main(int argc, char** argv) {
     Stats stats;
     std::unordered_map<std::string, uint64_t> last_used;
     auto last_report = std::chrono::steady_clock::now();
+    auto window_start = std::chrono::steady_clock::now();
+    uint32_t window_count = 0;
     const uint64_t slot_size = InodeStorage::INODE_DISK_SLOT_SIZE;
 
     bool started = opts.start_file.empty();
@@ -441,6 +445,19 @@ int main(int argc, char** argv) {
                 continue;
             }
             ++stats.inodes;
+
+            if (opts.max_inodes_per_sec > 0) {
+                ++window_count;
+                if (window_count >= opts.max_inodes_per_sec) {
+                    auto now = std::chrono::steady_clock::now();
+                    auto elapsed = now - window_start;
+                    if (elapsed < std::chrono::seconds(1)) {
+                        std::this_thread::sleep_for(std::chrono::seconds(1) - elapsed);
+                    }
+                    window_start = std::chrono::steady_clock::now();
+                    window_count = 0;
+                }
+            }
 
             const uint64_t bytes = inode.getFileSize();
             stats.bytes += bytes;

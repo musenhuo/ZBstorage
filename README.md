@@ -108,7 +108,7 @@ fio --name=zbfs \
   --ssd_devices_per_node 1 --hdd_devices_per_node 1 \
   --ssd_capacity_bytes $((350*1024*1024*1024*1024)) \
   --hdd_capacity_bytes $((50*1024*1024*1024*1024)) \
-  --report_interval_sec 60 \
+  --report_interval_sec 3 \
   --start_file inode_chunk_0.bin \
   --start_index 0
 

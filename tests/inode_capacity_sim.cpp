@@ -246,9 +246,13 @@ void PrintReport(const std::vector<NodeState>& nodes,
     }
 }
 
-void WriteJsonReport(std::ofstream& out, const std::vector<NodeState>& nodes, const Stats& stats) {
+void WriteJsonReport(const std::string& path, const std::vector<NodeState>& nodes, const Stats& stats) {
     auto now = std::chrono::system_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    std::ofstream out(path, std::ios::trunc);
+    if (!out.is_open()) {
+        return;
+    }
     out << "{";
     out << "\"timestamp_ms\":" << ms << ",";
     out << "\"inodes\":" << stats.inodes << ",";
@@ -288,7 +292,6 @@ void WriteJsonReport(std::ofstream& out, const std::vector<NodeState>& nodes, co
         if (i + 1 < nodes.size()) out << ",";
     }
     out << "]}\n";
-    out.flush();
 }
 
 void Consume(std::vector<DeviceState>& devices, uint64_t& remaining) {
@@ -391,10 +394,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::ofstream json_out(opts.json_log, std::ios::app);
-    if (!json_out.is_open()) {
-        std::cerr << "Failed to open json log: " << opts.json_log << "\n";
-        return 1;
+    {
+        std::ofstream json_out(opts.json_log, std::ios::trunc);
+        if (!json_out.is_open()) {
+            std::cerr << "Failed to open json log: " << opts.json_log << "\n";
+            return 1;
+        }
     }
 
     Stats stats;
@@ -503,7 +508,7 @@ int main(int argc, char** argv) {
             auto now = std::chrono::steady_clock::now();
             if (std::chrono::duration_cast<std::chrono::seconds>(now - last_report).count() >= opts.report_interval_sec) {
                 PrintReport(nodes, stats, opts.print_limit_nodes, last_used);
-                WriteJsonReport(json_out, nodes, stats);
+                WriteJsonReport(opts.json_log, nodes, stats);
                 last_report = now;
             }
 
@@ -518,6 +523,6 @@ int main(int argc, char** argv) {
     }
 
     PrintReport(nodes, stats, opts.print_limit_nodes, last_used);
-    WriteJsonReport(json_out, nodes, stats);
+    WriteJsonReport(opts.json_log, nodes, stats);
     return 0;
 }
